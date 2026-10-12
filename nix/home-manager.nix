@@ -19,7 +19,8 @@ let
   collectorSettings = {
     sinks = [
       { file = "~/.local/state/nod/events.jsonl"; }
-      { url = "http://${col.listen}"; }
+      # Si escucha en todas las interfaces, Nod le habla por loopback: así cuenta como destino local (privacidad trabajo).
+      { url = "http://${builtins.replaceStrings [ "0.0.0.0:" "[::]:" ] [ "127.0.0.1:" "127.0.0.1:" ] col.listen}"; }
     ];
   };
   collectorArgs = [ "${col.package}/bin/nod-collector" "serve" "--listen" col.listen "--db" "${config.xdg.stateHome}/nod/nod.db" ];

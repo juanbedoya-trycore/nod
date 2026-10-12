@@ -61,7 +61,7 @@
           "then": { "properties": { "data": { "required": ["tool_use_id", "tool", "decision", "by", "wait_ms", "exact"], "properties": { "decision": { "enum": ["allow", "deny"] }, "by": { "enum": ["policy", "user", "remote"] }, "exact": { "type": "boolean" } } } } }
         },
         { "if": { "properties": { "type": { "const": "agent.spawn" } } }, "then": { "properties": { "data": { "required": ["agent", "type", "background"] } } } },
-        { "if": { "properties": { "type": { "const": "agent.end" } } }, "then": { "properties": { "data": { "required": ["agent", "duration_ms", "usage"] } } } },
+        { "if": { "properties": { "type": { "const": "agent.end" } } }, "then": { "properties": { "data": { "required": ["agent", "duration_ms", "usage"], "properties": { "usage": { "$ref": "#/$defs/usage" } } } } } },
         { "if": { "properties": { "type": { "const": "command" } } }, "then": { "properties": { "data": { "required": ["name"] } } } },
         { "if": { "properties": { "type": { "const": "task.set" } } }, "then": { "properties": { "data": { "required": ["task", "source"], "properties": { "task": { "type": ["string", "null"] } } } } } },
         { "if": { "properties": { "type": { "const": "usage" } } }, "then": { "properties": { "data": { "minProperties": 1 } } } }

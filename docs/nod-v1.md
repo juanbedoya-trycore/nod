@@ -17,8 +17,8 @@ normativos; lo marcado *opc.* puede faltar.
 | Estado | Significado | Nod hace |
 | --- | --- | --- |
 | 2xx | aceptado. *Opc.*: `{"accepted": n, "duplicates": d}` | quita el lote de la cola |
+| 401, 403 | token rechazado (se comprueba antes que el contenido) | conserva la cola, reintenta con espera |
 | 400, 413, 422 | lote inválido para siempre | parte el lote por la mitad hasta aislar el evento culpable y lo descarta (contado) |
-| 401, 403 | token rechazado | conserva la cola, reintenta con espera |
 | otro, red o sin respuesta en 10 s | fallo temporal | conserva la cola, reintenta con espera exponencial (máx. 30 s) |
 
 Los eventos se agrupan en lotes (ventana de 250 ms, máx. 500). Los de fin de turno, fin de sesión, fin de
@@ -85,14 +85,14 @@ Tiempos en `*_ms`; tokens en `usage` = `{ "input", "output", "cache_read", "cach
 | `prompt.submit` | se envía un prompt | `origin` (`composer` = el humano; `task-notification`, `queue`… = otros), `chars`; *opc.*: `text`, `edit` {`events`, `typing_ms`, `recalled`, `revised`} (solo en `composer`) |
 | `turn.start` | empieza un turno de la sesión principal (los subagentes no lo tienen) | — |
 | `turn.step` | termina una llamada al modelo | `index`, `tools` (nombres), `usage`; *opc.*: `model`, `effort`, `stop_reason`, `partial` (`true`: sin motivo de parada, la llamada se cortó y `usage` puede quedarse corto) |
-| `turn.end` | termina el turno | `outcome` (`answer`, `aborted`…), `usage` (suma de sus pasos), `steps`, `answer_chars`; *opc.*: `duration_ms`, `answer` |
+| `turn.end` | termina el turno | `outcome` (`answer`, `aborted`…), `usage` (suma de sus pasos), `steps`, `answer_chars`; *opc.*: `duration_ms` (lo da el agente; si falta, un consumidor puede usar `ts` de `turn.end` menos el de `turn.start`), `answer` |
 | `tool.call` | el agente va a usar una tool | `tool_use_id`, `tool`; *opc.*: `verb` (programa de un comando de shell), `input` |
 | `tool.result` | la tool terminó | `tool_use_id`, `tool`, `duration_ms` (ejecución), `ok`, `rejected` (el humano la negó), `output_chars` |
 | `permission.request` | el agente pregunta al humano | `tool_use_id`, `tool`; *opc.*: `reason`, `check_ms` (lo que tardó en decidir preguntar: crece si otro mod retuvo el permiso) |
-| `permission.decision` | se decidió un permiso | `tool_use_id`, `tool`, `decision` (`allow`/`deny`), `by` (`policy`, `user`, `remote`), `wait_ms`, `exact`; *opc.*: `check_ms` |
+| `permission.decision` | se decidió un permiso | `tool_use_id`, `tool`, `decision` (`allow`/`deny`), `by` (`policy`, `user`, `remote`), `wait_ms`, `exact`; *opc.*: `check_ms` (solo con `by: "policy"`: un permiso lleva `check_ms` en su `permission.request` o en su decisión, nunca en los dos) |
 | `agent.spawn` | arranca un subagente | `agent`, `type`, `background`; *opc.*: `fork`, `permission_mode`, `description`, `model`, `tool_use_id` |
 | `agent.end` | acaba un turno del subagente | `agent`, `duration_ms`, `usage` (acumulado desde su arranque; si hay varios, vale el último) |
-| `usage` | instantánea de consumo, al final de cada turno principal | al menos uno de: `context` {`tokens`, `window`, `percent`}, `limits` [{`kind`, `percent_used`, `resets_at` opc.}], `cost_usd` |
+| `usage` | instantánea de consumo, al final de cada turno principal | al menos uno de: `context` {`tokens`, `window`, `percent`}, `limits` [{`kind` (`five_hour`, `seven_day`; otros posibles), `percent_used` (0–100), `resets_at` opc. (ISO 8601)}], `cost_usd` (acumulado de la sesión **en este proceso**: al reanudarla en otro proceso vuelve a empezar) |
 | `command` | el humano ejecuta un comando de barra | `name` (sin argumentos) |
 | `task.set` | cambia la tarea | `task` (`null` = tarea cerrada), `source` (`command`, `env`); *opc.*: `title` |
 

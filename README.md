@@ -60,7 +60,7 @@ instala en los perfiles nuevos en cuanto aparecen. Si encuentra una versión ant
 | ¿Qué permisos negué, de qué tools? | `permission.decision` (`deny`, `user`) y `tool.result.rejected` |
 | ¿Cuántos turnos hace el agente por cada prompt mío? | `prompt.submit` con `origin: "composer"` frente a `turn.step` |
 | ¿Interrumpí o reescribí? | `turn.end.outcome = "aborted"`, `prompt.submit.edit` (`revised`, `recalled`, `typing_ms`) |
-| ¿Cuántos tokens y cuánta caché por tarea? | `turn.step.usage` / `agent.end.usage`, agrupados por `task` |
+| ¿Cuántos tokens y cuánta caché por tarea? | Σ `turn.step.usage` (incluye subagentes; `turn.end` y `agent.end` son agregados, no se suman), agrupado por `task` |
 | ¿Cuánto me queda del límite de 5 h? | `usage.limits` (5 h y 7 días, con su renovación), `usage.context`, `usage.cost_usd` |
 
 Las señales humanas (aprobar o negar, interrumpir, reescribir un prompt) solo las ve un mod: no existen en los
