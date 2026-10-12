@@ -3,7 +3,7 @@
 //   mod/src/vendor/qrcode.ts
 //
 // Por qué: el sandbox de mods solo deja importar ficheros propios por ruta relativa (ver vendor-noble.mjs).
-// Lo usa `/orbit setup` para dibujar el QR del emparejamiento automático con caracteres de bloque.
+// Lo usa `/nod setup` para dibujar el QR del emparejamiento automático con caracteres de bloque.
 //
 //   npm --prefix mod run vendor:qr             regenera
 //   npm --prefix mod run vendor:qr -- --check  sale con 1 si el fichero no coincide
@@ -34,7 +34,7 @@ if (/\bimport\s*\(|^\s*import\s/m.test(code)) throw new Error("el bundle aún ti
 const header = `// @ts-nocheck
 // GENERADO por mod/scripts/vendor-qr.mjs: no editar a mano.
 // ${versions}. Licencia MIT (c) Kazuhiko Arase, https://github.com/kazuhikoarase/qrcode-generator
-// Solo se usa para dibujar el QR de /orbit setup (emparejamiento automático, SPEC §6.3.1).
+// Solo se usa para dibujar el QR de /nod setup (emparejamiento automático, SPEC §6.3.1).
 `;
 const text = header + code;
 

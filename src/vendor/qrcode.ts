@@ -1,7 +1,7 @@
 // @ts-nocheck
 // GENERADO por mod/scripts/vendor-qr.mjs: no editar a mano.
 // qrcode-generator 2.0.4, esbuild 0.28.2. Licencia MIT (c) Kazuhiko Arase, https://github.com/kazuhikoarase/qrcode-generator
-// Solo se usa para dibujar el QR de /orbit setup (emparejamiento automático, SPEC §6.3.1).
+// Solo se usa para dibujar el QR de /nod setup (emparejamiento automático, SPEC §6.3.1).
 // node_modules/qrcode-generator/dist/qrcode.mjs
 var qrcode = function(typeNumber, errorCorrectionLevel) {
   const PAD0 = 236;

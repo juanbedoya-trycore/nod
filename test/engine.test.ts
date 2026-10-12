@@ -1,6 +1,6 @@
-/** OrbitEngine sobre una Platform falsa: lo que verá cualquier adaptador. */
+/** NodEngine sobre una Platform falsa: lo que verá cualquier adaptador. */
 import { describe, expect, it } from "vitest";
-import { OrbitEngine, SERVER_INSTALL_HINT } from "../src/core/engine.js";
+import { NodEngine, SERVER_INSTALL_HINT } from "../src/core/engine.js";
 import type { OrbitEnv, Platform, SessionControl } from "../src/core/platform.js";
 
 function fakePlatform(env: OrbitEnv, files: Record<string, string> = {}) {
@@ -44,10 +44,10 @@ function fakePlatform(env: OrbitEnv, files: Record<string, string> = {}) {
 const control: SessionControl = { abortTurn: async () => undefined, submitPrompt: async () => undefined };
 const ENV: OrbitEnv = { ORBIT_URL: "http://127.0.0.1:7878", ORBIT_TOKEN: "t".repeat(32), ORBIT_INSTANCE_ID: "mac-test", ORBIT_CTX: "personal", HOME: "/nohome" };
 
-describe("OrbitEngine", () => {
-  it("sin variables ni client.json, /orbit dice que falta el servidor", async () => {
+describe("NodEngine", () => {
+  it("sin variables ni client.json, /nod dice que falta el servidor", async () => {
     const { p } = fakePlatform({ HOME: "/nohome" });
-    const text = await new OrbitEngine().command(p, "");
+    const text = await new NodEngine().command(p, "");
     expect(text).toContain("sin configurar");
     expect(text).toContain(SERVER_INSTALL_HINT);
   });
@@ -55,14 +55,14 @@ describe("OrbitEngine", () => {
   it("con client.json del servidor se configura solo", async () => {
     const client = JSON.stringify({ v: 1, url: "http://127.0.0.1:7878", token: "t".repeat(32), instance_id: "mac-auto", ctx: "personal" });
     const { p } = fakePlatform({ ORBIT_STATE_DIR: "/estado" }, { "/estado/client.json": client });
-    const text = await new OrbitEngine().command(p, "");
+    const text = await new NodEngine().command(p, "");
     expect(text).toContain("instancia: mac-auto");
     expect(text).toContain("configuración: /estado/client.json");
   });
 
   it("un fin de turno de la sesión principal sale ya, con lo que añade el adaptador", async () => {
     const { p, posts } = fakePlatform(ENV);
-    const o = new OrbitEngine();
+    const o = new NodEngine();
     await o.sessionStart(p, { source: "startup" }, control, { orbit_where: { profile: "claude" } });
     await o.turnStart(p, { turnId: "turn-1" });
     await o.turnComplete(p, {}, control, async () => ({ cost_usd: 0.5 }));
@@ -77,7 +77,7 @@ describe("OrbitEngine", () => {
   it("un ask que el agente no deja retener (auto mode) pasa sin avisar al servidor", async () => {
     const { p, posts } = fakePlatform(ENV);
     const verdict = { decision: "ask" } as any;
-    const out = await new OrbitEngine().toolCheck(p, { tool: "Bash", input: { command: "ls" }, tool_use_id: "toolu_1" }, verdict, undefined, false);
+    const out = await new NodEngine().toolCheck(p, { tool: "Bash", input: { command: "ls" }, tool_use_id: "toolu_1" }, verdict, undefined, false);
     expect(out).toBe(verdict);
     expect(posts).toEqual([]);
   });
@@ -85,14 +85,14 @@ describe("OrbitEngine", () => {
   it("un ask sin reloj emparejado no se retiene", async () => {
     const { p } = fakePlatform(ENV);
     const verdict = { decision: "ask" } as any;
-    const out = await new OrbitEngine().toolCheck(p, { tool: "Bash", input: { command: "ls" }, tool_use_id: "toolu_2" }, verdict, undefined);
+    const out = await new NodEngine().toolCheck(p, { tool: "Bash", input: { command: "ls" }, tool_use_id: "toolu_2" }, verdict, undefined);
     expect(out).toBe(verdict);
   });
 
-  it("/orbit away es de la máquina: lo guarda en el directorio de estado", async () => {
+  it("/nod away es de la máquina: lo guarda en el directorio de estado", async () => {
     const client = JSON.stringify({ v: 1, url: "http://127.0.0.1:7878", token: "t".repeat(32), instance_id: "mac-auto", ctx: "personal" });
     const { p, files } = fakePlatform({ ORBIT_STATE_DIR: "/estado" }, { "/estado/client.json": client });
-    const text = await new OrbitEngine().command(p, "away");
+    const text = await new NodEngine().command(p, "away");
     expect(text).toContain("lejos del Mac");
     expect(JSON.parse(files["/estado/away.json"]!)).toEqual({ away: true });
   });

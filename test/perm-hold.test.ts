@@ -183,7 +183,7 @@ function setup(opts: { ctx?: Ctx; holdMs?: number; verify?: DecisionVerifier } =
     random: (n) => Uint8Array.from({ length: n }, (_, i) => (i * 31 + ++counter) & 0xff),
     log: (m) => logs.push(m),
   };
-  const config: Config = { url: "http://orbit.test", token: "t0k", instanceId: "mac-personal", ctx: opts.ctx ?? "personal" };
+  const config: Config = { url: "http://nod.test", token: "t0k", instanceId: "mac-personal", ctx: opts.ctx ?? "personal" };
   const holder = new PermHolder({
     config,
     perm: { enabled: true, holdMs: opts.holdMs ?? 90_000, forbidden: [...DEFAULT_FORBIDDEN] },
@@ -288,7 +288,7 @@ describe("PermHolder: carrera §6.5", () => {
     expect(server.resolved()[0]).toMatchObject({ by: "timeout", decision: "none" });
   });
 
-  it("/orbit away: la retención de la llamada (90 s) manda sobre la de la config (20 s)", async () => {
+  it("/nod away: la retención de la llamada (90 s) manda sobre la de la config (20 s)", async () => {
     const { clock, server, holder } = setup({ holdMs: 20_000 });
     const p = probe(holder.hold(bash("t1", "touch x"), ASK, { sessionId: "s", holdMs: 90_000 }));
     await clock.advance(0);
@@ -322,7 +322,7 @@ describe("PermHolder: carrera §6.5", () => {
     const server = new FakeServer(clock);
     let calls = 0;
     const holder = new PermHolder({
-      config: { url: "http://orbit.test", token: "t0k", instanceId: "mac-personal", ctx: "personal" },
+      config: { url: "http://nod.test", token: "t0k", instanceId: "mac-personal", ctx: "personal" },
       perm: { enabled: true, holdMs: 90_000, forbidden: [...DEFAULT_FORBIDDEN] },
       io: {
         // 1.ª y 2.ª llamada: inicio y resto de la espera; la 3.ª (primera vuelta del bucle) falla.
@@ -707,7 +707,7 @@ describe("PermHolder: carrera §6.5", () => {
     expect(server.resolved()[0]).toMatchObject({ by: "timeout", reject: "sig" });
 
     const broken = new PermHolder({
-      config: { url: "http://orbit.test", token: "t0k", instanceId: "mac-personal", ctx: "personal" },
+      config: { url: "http://nod.test", token: "t0k", instanceId: "mac-personal", ctx: "personal" },
       perm: { enabled: true, holdMs: 90_000, forbidden: [...DEFAULT_FORBIDDEN] },
       io: { now: clock.now, fetch: server.fetch, after: clock.after, random: () => { throw new Error("no csprng"); }, log: () => undefined },
       verify: fakeVerify,
@@ -720,7 +720,7 @@ describe("PermHolder: carrera §6.5", () => {
     const clock = new FakeClock();
     const server = new FakeServer(clock);
     const holder = new PermHolder({
-      config: { url: "http://orbit.test", token: "t0k", instanceId: "mac-personal", ctx: "personal" },
+      config: { url: "http://nod.test", token: "t0k", instanceId: "mac-personal", ctx: "personal" },
       perm: { enabled: false, holdMs: 90_000, forbidden: [] },
       io: { now: clock.now, fetch: server.fetch, after: clock.after, random: (n) => new Uint8Array(n), log: () => undefined },
       verify: fakeVerify,

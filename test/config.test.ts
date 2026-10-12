@@ -32,7 +32,7 @@ describe("parseConfig", () => {
 
 import { parseOrbitArgs } from "../src/core/command.js";
 
-describe("/orbit away y back", () => {
+describe("/nod away y back", () => {
   it("se reconocen como acciones", () => {
     expect(parseOrbitArgs("away")).toBe("away");
     expect(parseOrbitArgs(" BACK ")).toBe("back");
@@ -43,7 +43,7 @@ describe("/orbit away y back", () => {
 import { effectiveCtx } from "../src/core/types.js";
 import { applyAllowlist } from "../src/core/allowlist.js";
 
-describe("/orbit privacidad", () => {
+describe("/nod privacidad", () => {
   it("se reconoce en español y en inglés", () => {
     expect(parseOrbitArgs("privacidad")).toBe("privacy");
     expect(parseOrbitArgs("privacidad metadatos")).toBe("privacy-metadata");

@@ -1,4 +1,4 @@
-/** Emparejamiento (protocol/docs/pairing.md): huellas, ofertas no fiables y el comando /orbit pair. */
+/** Emparejamiento (protocol/docs/pairing.md): huellas, ofertas no fiables y el comando /nod pair. */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -112,7 +112,7 @@ describe("huella y entrada del usuario", () => {
 });
 
 describe("parsePairCommand", () => {
-  it("reconoce pair y unpair, y deja pasar el resto de /orbit", () => {
+  it("reconoce pair y unpair, y deja pasar el resto de /nod", () => {
     expect(parsePairCommand("")).toBeUndefined();
     expect(parsePairCommand("status")).toBeUndefined();
     expect(parsePairCommand("pair")).toEqual({ kind: "list" });
@@ -147,7 +147,7 @@ describe("ofertas: el mod no confía en el servidor", () => {
   });
 });
 
-describe("/orbit pair (flujo completo con servidor falso)", () => {
+describe("/nod pair (flujo completo con servidor falso)", () => {
   it("list -> confirm guarda la llave y borra la oferta; la llave verifica decisiones", async () => {
     const { io, store, calls } = fakeIo([offerOf(WATCH, "Galaxy\u001b[31m Watch")]);
     const listed = await run(io, "pair");

@@ -1,4 +1,4 @@
-// Orbit para Claude Code. Generado por scripts/bundle.mjs desde src/: no editar a mano.
+// Nod para Claude Code. Generado por scripts/bundle.mjs desde src/: no editar a mano.
 
 // src/core/allowlist.ts
 var WORK_ALLOWLIST = [
@@ -204,7 +204,7 @@ var Collector = class {
       if (stored.instance_id !== this.cfg.instanceId) {
         this.queue.droppedTotal += stored.items.length;
         this.unreportedDrops += stored.items.length;
-        this.io.log(`orbit: se descartaron ${stored.items.length} eventos en cola de la instancia "${stored.instance_id}" (ahora es "${this.cfg.instanceId}")`);
+        this.io.log(`nod: se descartaron ${stored.items.length} eventos en cola de la instancia "${stored.instance_id}" (ahora es "${this.cfg.instanceId}")`);
       } else {
         const items = stored.items.map((it) => ({ ...it, ev: applyAllowlist(it.ev, effectiveCtx(this.cfg)) }));
         this.unreportedDrops += this.queue.load({ items, dropped: Number(stored.dropped) || 0 });
@@ -295,7 +295,7 @@ var Collector = class {
     }
     if (dup <= 0) return;
     this.duplicates += dup;
-    this.io.log(`orbit: el servidor descart\xF3 ${dup} eventos por repetidos (n ya visto; total ${this.duplicates}). Si no es un reenv\xEDo, otra sesi\xF3n usa el mismo instance_id`);
+    this.io.log(`nod: el servidor descart\xF3 ${dup} eventos por repetidos (n ya visto; total ${this.duplicates}). Si no es un reenv\xEDo, otra sesi\xF3n usa el mismo instance_id`);
   }
   async fail(err, backoff = true) {
     const now = await this.io.now();
@@ -309,7 +309,7 @@ var Collector = class {
   /** Nunca descartar en silencio: cada pérdida acaba en el log con su cuenta. */
   reportLoss() {
     if (this.unreportedDrops === 0) return;
-    this.io.log(`orbit: se perdieron ${this.unreportedDrops} eventos (cola llena o rechazados; total perdidos: ${this.queue.droppedTotal})`);
+    this.io.log(`nod: se perdieron ${this.unreportedDrops} eventos (cola llena o rechazados; total perdidos: ${this.queue.droppedTotal})`);
     this.unreportedDrops = 0;
   }
   async saveSeq() {
@@ -325,7 +325,7 @@ var Collector = class {
       else await this.io.save(STORE_KEYS.queue(this.cfg.instanceId), { v: 1, instance_id: this.cfg.instanceId, ...this.queue.toJSON() });
       this.persistedVersion = version;
     } catch (err) {
-      this.io.log(`orbit: no se pudo guardar la cola (${err instanceof Error ? err.message : String(err)})`);
+      this.io.log(`nod: no se pudo guardar la cola (${err instanceof Error ? err.message : String(err)})`);
     }
   }
   status() {
@@ -358,7 +358,7 @@ function parseOrbitArgs(args) {
   if (/^(privacidad|privacy)\s+(metadatos|metadata)$/.test(a)) return "privacy-metadata";
   return "invalid";
 }
-var ORBIT_USAGE = "uso: /orbit [status | away | back | privacidad [completa|metadatos] | respuestas [a\xF1adir <texto>|quitar <n>|restablecer] | pause | resume | setup | pair | unpair <huella>]";
+var ORBIT_USAGE = "uso: /nod [status | away | back | privacidad [completa|metadatos] | respuestas [a\xF1adir <texto>|quitar <n>|restablecer] | pause | resume | setup | pair | unpair <huella>]";
 function ago(now, at) {
   if (at === void 0) return "nunca";
   const s = Math.max(0, Math.round((now - at) / 1e3));
@@ -386,7 +386,7 @@ function formatStatus(cfg, errors, status, now) {
     `  \xFAltimo error: ${status.lastError === void 0 ? "ninguno" : `${status.lastError} (${ago(now, status.lastErrorAt)})`}`
   ];
   if (status.duplicates > 0) lines.push(`  descartados por repetidos en el servidor: ${status.duplicates} (\xBFotra sesi\xF3n con el mismo instance_id?)`);
-  if (status.paused) lines.push("  el env\xEDo est\xE1 pausado: los eventos se acumulan en la cola; /orbit resume para reanudar");
+  if (status.paused) lines.push("  el env\xEDo est\xE1 pausado: los eventos se acumulan en la cola; /nod resume para reanudar");
   return lines.join("\n");
 }
 
@@ -3899,7 +3899,7 @@ var PermHolder = class {
   retryMs;
   resolvedTimeoutMs;
   pendingTimeoutMs;
-  /** Últimas resoluciones (para /orbit y los tests). */
+  /** Últimas resoluciones (para /nod y los tests). */
   reports = [];
   /** Número de permisos retenidos ahora mismo. */
   pendingCount() {
@@ -4323,7 +4323,7 @@ function readReplies(raw) {
 function writeReplies(list) {
   return { v: 1, replies: cleanReplies(list) };
 }
-var REPLIES_USAGE = "uso: /orbit respuestas [a\xF1adir <texto> | quitar <n> | restablecer]";
+var REPLIES_USAGE = "uso: /nod respuestas [a\xF1adir <texto> | quitar <n> | restablecer]";
 function parseRepliesCommand(args) {
   const m = /^\s*(respuestas|replies)(?:\s+([\s\S]*))?$/i.exec(args);
   if (m === null) return void 0;
@@ -4352,7 +4352,7 @@ ${show(DEFAULT_REPLIES)}` };
     case "add": {
       if (list.includes(cmd.text)) return { list, changed: false, message: `ya estaba
 ${show(list)}` };
-      if (list.length >= REPLIES_MAX) return { list, changed: false, message: `ya hay ${REPLIES_MAX}: quita una antes (/orbit respuestas quitar <n>)` };
+      if (list.length >= REPLIES_MAX) return { list, changed: false, message: `ya hay ${REPLIES_MAX}: quita una antes (/nod respuestas quitar <n>)` };
       const next = [...list, cmd.text];
       return { list: next, changed: true, message: `a\xF1adida: ${cmd.text}
 ${show(next)}` };
@@ -4833,12 +4833,12 @@ function parseOffers(text) {
 }
 var PAIR_USAGE = [
   "uso:",
-  "  /orbit setup                     QR para el tel\xE9fono: lo configura y empareja el reloj solo",
-  "  /orbit pair                      ofertas pendientes del reloj, con su huella",
-  "  /orbit pair confirm <huella>     empareja la llave cuya huella coincide con la del reloj",
-  "  /orbit pair reject <huella>      descarta una oferta",
-  "  /orbit pair keys                 llaves emparejadas",
-  "  /orbit unpair <huella>           revoca una llave emparejada"
+  "  /nod setup                     QR para el tel\xE9fono: lo configura y empareja el reloj solo",
+  "  /nod pair                      ofertas pendientes del reloj, con su huella",
+  "  /nod pair confirm <huella>     empareja la llave cuya huella coincide con la del reloj",
+  "  /nod pair reject <huella>      descarta una oferta",
+  "  /nod pair keys                 llaves emparejadas",
+  "  /nod unpair <huella>           revoca una llave emparejada"
 ].join("\n");
 function parsePairCommand(args) {
   const parts = args.trim().split(/\s+/);
@@ -4922,7 +4922,7 @@ async function runPairCommand(cfg, io, action, instanceId2) {
   if (action.kind === "list") {
     const { offers: offers2, dropped } = await fetchOffers(cfg, io);
     const lines = [];
-    if (offers2.length === 0) lines.push("no hay ofertas de emparejamiento pendientes. Lo m\xE1s f\xE1cil: /orbit setup y escanear el QR con el tel\xE9fono (o, en el reloj, Orbit > Emparejar).");
+    if (offers2.length === 0) lines.push("no hay ofertas de emparejamiento pendientes. Lo m\xE1s f\xE1cil: /nod setup y escanear el QR con el tel\xE9fono (o, en el reloj, Orbit > Emparejar).");
     else {
       lines.push(`ofertas pendientes (${offers2.length}). Compara la huella con la que muestra el reloj:`);
       for (const o of offers2) {
@@ -4934,10 +4934,10 @@ async function runPairCommand(cfg, io, action, instanceId2) {
           `AVISO: hay ${offers2.length} ofertas pendientes. Si solo has pedido emparejar un reloj, alguna no es tuya: confirma \xFAnicamente la que coincide con la huella y la hora que ves en el reloj.`
         );
       }
-      lines.push("Si coincide ENTERA: /orbit pair confirm <huella>. Si no coincide, no la confirmes: /orbit pair reject <huella>.");
+      lines.push("Si coincide ENTERA: /nod pair confirm <huella>. Si no coincide, no la confirmes: /nod pair reject <huella>.");
     }
     if (dropped > 0) lines.push(`(${dropped} ofertas descartadas: SPKI inv\xE1lido o kid que no corresponde a su llave)`);
-    lines.push(`llaves emparejadas: ${current.stored.length} (/orbit pair keys)`);
+    lines.push(`llaves emparejadas: ${current.stored.length} (/nod pair keys)`);
     return lines.join("\n");
   }
   const hex2 = hexOf(action.kid);
@@ -4948,8 +4948,8 @@ async function runPairCommand(cfg, io, action, instanceId2) {
   if (current.stored.some((k) => k.kid === hex2)) return `esa llave ya est\xE1 emparejada: ${describe(action.kid)}`;
   const { offers } = await fetchOffers(cfg, io);
   const offer = offers.find((o) => hexOf(o.kid) === hex2);
-  if (offer === void 0) return `no hay ninguna oferta pendiente con la huella ${fingerprint(action.kid).hex}. Lista: /orbit pair`;
-  if (current.stored.length >= MAX_PAIRED_KEYS) return `ya hay ${MAX_PAIRED_KEYS} llaves emparejadas: revoca alguna con /orbit unpair <huella>`;
+  if (offer === void 0) return `no hay ninguna oferta pendiente con la huella ${fingerprint(action.kid).hex}. Lista: /nod pair`;
+  if (current.stored.length >= MAX_PAIRED_KEYS) return `ya hay ${MAX_PAIRED_KEYS} llaves emparejadas: revoca alguna con /nod unpair <huella>`;
   await save([...current.stored, { kid: hex2, spki: b64uEncode2(offer.spki), label: offer.label, paired_at: now }]);
   const removed = await deleteOffer(cfg, io, offer.kid);
   return [
@@ -6805,9 +6805,9 @@ var PRIVACY_KEY = "orbit.privacy";
 var AWAY_KEY = "orbit.away";
 var AWAY_FILE = "away.json";
 var PAIR_KEYS_PREFIX = PAIR_STORE_KEY("");
-var SETUP_HELP = "/orbit setup [--link]: QR para el tel\xE9fono (Orbit > Escanear QR). --link imprime tambi\xE9n el enlace orbit://setup.";
-var COMMAND_DESCRIPTION = "Orbit: estado, /orbit setup (QR para el tel\xE9fono), /orbit away, /orbit back, /orbit respuestas, /orbit pause, /orbit resume, /orbit pair, /orbit unpair";
-var OrbitEngine = class {
+var SETUP_HELP = "/nod setup [--link]: QR para el tel\xE9fono (Orbit > Escanear QR). --link imprime tambi\xE9n el enlace orbit://setup.";
+var COMMAND_DESCRIPTION = "Nod: estado, /nod setup (QR para el tel\xE9fono), /nod away, /nod back, /nod respuestas, /nod pause, /nod resume, /nod pair, /nod unpair";
+var NodEngine = class {
   runtime;
   timer;
   holder;
@@ -6908,12 +6908,12 @@ var OrbitEngine = class {
       await this.emit(p, rt.translator.sessionEnd(sid, e), true);
     });
   }
-  /** `/orbit …`. Nunca lanza. */
+  /** `/nod …`. Nunca lanza. */
   async command(p, args) {
     try {
       return await this.runOrbitCommand(p, args);
     } catch (err) {
-      return `orbit: error (${String(err)})`;
+      return `nod: error (${String(err)})`;
     }
   }
   // ---------- configuración y envío ----------
@@ -6921,7 +6921,7 @@ var OrbitEngine = class {
     try {
       await work();
     } catch (err) {
-      p.log(`orbit: ${label2} fall\xF3 (${String(err)})`);
+      p.log(`nod: ${label2} fall\xF3 (${String(err)})`);
     }
   }
   io(p) {
@@ -7010,7 +7010,7 @@ var OrbitEngine = class {
       await collector.flush();
       await this.schedule(p, rt);
     } catch (err) {
-      p.log(`orbit: fallo al enviar (${String(err)})`);
+      p.log(`nod: fallo al enviar (${String(err)})`);
     }
   }
   /** Traduce, encola y programa el envío. `urgent` envía ya (Stop, SessionEnd, PermissionRequest). */
@@ -7069,17 +7069,17 @@ var OrbitEngine = class {
    */
   async loadWatchKeys(p, instanceId2) {
     const { keys, dropped } = dropTestKeys(await loadPairedKeys(instanceId2, { load: (key) => this.loadKeys(p, key) }));
-    if (dropped > 0) p.log(`orbit: ${dropped} llave(s) de prueba ignoradas (su clave privada es p\xFAblica)`);
+    if (dropped > 0) p.log(`nod: ${dropped} llave(s) de prueba ignoradas (su clave privada es p\xFAblica)`);
     const parsed = parseWatchKeys((await p.env()).ORBIT_WATCH_KEYS);
     if (!parsed.ok) {
-      p.log(`orbit: ORBIT_WATCH_KEYS ignorada (${parsed.error})`);
+      p.log(`nod: ORBIT_WATCH_KEYS ignorada (${parsed.error})`);
       return keys;
     }
     for (const k of parsed.keys) if (!keys.some((o) => hexOf(o.kid) === hexOf(k.kid))) keys.push(k);
     return keys;
   }
   // ---------- emparejamiento automático por QR (SPEC §6.3.1) ----------
-  /** K del almacén (los de /orbit setup) y de setup.json del directorio de estado (los de orbit-server setup). */
+  /** K del almacén (los de /nod setup) y de setup.json del directorio de estado (los de orbit-server setup). */
   keyring(p, instanceId2) {
     const storeKey = SETUP_STORE_KEY(instanceId2);
     return {
@@ -7110,30 +7110,30 @@ var OrbitEngine = class {
       if (rt.config === void 0) return [];
       const cfg = { url: rt.config.url, token: rt.config.token, instanceId: rt.config.instanceId };
       const r = await autoPair(cfg, this.pairingIo(p), this.keyring(p, cfg.instanceId));
-      if (r.rejected > 0) p.log(`orbit: ${r.rejected} oferta(s) con etiqueta que no verifica (${why}): se quedan para /orbit pair`);
+      if (r.rejected > 0) p.log(`nod: ${r.rejected} oferta(s) con etiqueta que no verifica (${why}): se quedan para /nod pair`);
       for (const k of r.paired) {
-        p.log(`orbit: emparejada por QR (${why}): ${describePaired(k)}`);
-        p.toast(`Orbit: reloj emparejado: ${describePaired(k)}`);
+        p.log(`nod: emparejada por QR (${why}): ${describePaired(k)}`);
+        p.toast(`Nod: reloj emparejado: ${describePaired(k)}`);
       }
       return r.paired;
     } catch (err) {
-      p.log(`orbit: emparejamiento autom\xE1tico fall\xF3 (${String(err)})`);
+      p.log(`nod: emparejamiento autom\xE1tico fall\xF3 (${String(err)})`);
       return [];
     }
   }
-  /** Tras /orbit setup: mira cada 2 s durante 2 min si ya llegó la oferta del teléfono. */
+  /** Tras /nod setup: mira cada 2 s durante 2 min si ya llegó la oferta del teléfono. */
   watchSetup(p, until) {
     this.setupWatch?.cancel();
     const tick = async () => {
       const now = Number(await p.now());
-      const paired = await this.checkAutoPair(p, "/orbit setup");
+      const paired = await this.checkAutoPair(p, "/nod setup");
       if (paired.length > 0 || now >= until) {
         this.setupWatch = void 0;
         p.status(void 0);
-        if (paired.length === 0) p.toast("Orbit: no lleg\xF3 la oferta del tel\xE9fono en 2 min. El QR sigue valiendo 15 min: se emparejar\xE1 en la siguiente sesi\xF3n o con /orbit.");
+        if (paired.length === 0) p.toast("Nod: no lleg\xF3 la oferta del tel\xE9fono en 2 min. El QR sigue valiendo 15 min: se emparejar\xE1 en la siguiente sesi\xF3n o con /nod.");
         return;
       }
-      p.status(`Orbit: escanea el QR con el tel\xE9fono\u2026 (${Math.ceil((until - now) / 1e3)} s)`);
+      p.status(`Nod: escanea el QR con el tel\xE9fono\u2026 (${Math.ceil((until - now) / 1e3)} s)`);
       this.setupWatch = p.after(2e3, () => void tick());
     };
     void tick();
@@ -7165,7 +7165,7 @@ var OrbitEngine = class {
       "Escanea el QR con el tel\xE9fono\u2026 (Orbit > Escanear QR)",
       `  servidor ${phone}, instancia ${cfg.instanceId}. V\xE1lido 15 min y una sola vez.`,
       "  El tel\xE9fono se configura solo, pide la llave al reloj y el reloj queda emparejado sin comparar huellas.",
-      "  Espero la oferta 2 min (barra de estado); despu\xE9s se empareja en la siguiente sesi\xF3n, en cada permiso o con /orbit.",
+      "  Espero la oferta 2 min (barra de estado); despu\xE9s se empareja en la siguiente sesi\xF3n, en cada permiso o con /nod.",
       "  El QR lleva el token de la instancia: no lo compartas."
     ];
     if (/(^|\s)--link(\s|$)/.test(args)) lines.push("", link);
@@ -7176,12 +7176,12 @@ var OrbitEngine = class {
     const now = Number(await p.now());
     const live = liveSetupKeys(readSetupKeys(await p.store.get(SETUP_STORE_KEY(instanceId2))), instanceId2, now);
     const lines = [
-      keys.length === 0 ? "  reloj: sin emparejar (/orbit setup y escanear el QR con el tel\xE9fono)" : `  reloj: ${keys.length} llave(s) emparejada(s): ${keys.map((k) => hexOf(k.kid).match(/.{4}/g).join(" ")).join(", ")} (/orbit pair keys)`
+      keys.length === 0 ? "  reloj: sin emparejar (/nod setup y escanear el QR con el tel\xE9fono)" : `  reloj: ${keys.length} llave(s) emparejada(s): ${keys.map((k) => hexOf(k.kid).match(/.{4}/g).join(" ")).join(", ")} (/nod pair keys)`
     ];
     if (live.length > 0) lines.push(`  QR de emparejamiento vigente (${live.length}): esperando la oferta del tel\xE9fono`);
     return lines.join("\n");
   }
-  // ---------- /orbit ----------
+  // ---------- /nod ----------
   async runOrbitCommand(p, args) {
     const replies = parseRepliesCommand(args);
     if (replies !== void 0) {
@@ -7221,9 +7221,9 @@ var OrbitEngine = class {
     if (action === "away") await this.setAway(p, true);
     if (action === "back") await this.setAway(p, false);
     let text = formatStatus(rt.config, rt.errors, collector?.status(), await p.now());
-    text += await this.isAway(p) ? "\n  modo lejos: el reloj tiene 90 s para decidir antes de que salga el di\xE1logo del terminal (/orbit back para volver)" : "\n  modo cerca: el reloj tiene 20 s para decidir; luego decide el terminal (/orbit away si te vas del Mac)";
+    text += await this.isAway(p) ? "\n  modo lejos: el reloj tiene 90 s para decidir antes de que salga el di\xE1logo del terminal (/nod back para volver)" : "\n  modo cerca: el reloj tiene 20 s para decidir; luego decide el terminal (/nod away si te vas del Mac)";
     if (rt.config !== void 0) {
-      const paired = await this.checkAutoPair(p, "/orbit");
+      const paired = await this.checkAutoPair(p, "/nod");
       text += `
   configuraci\xF3n: ${rt.source}`;
       text += `
@@ -7259,7 +7259,7 @@ ${text}`;
     const env2 = await p.env();
     const parsed = parsePermConfig({ enabled: env2.ORBIT_PERM, holdMs: env2.ORBIT_PERM_HOLD_MS, forbidden: env2.ORBIT_FORBIDDEN, forbiddenAdd: env2.ORBIT_FORBIDDEN_ADD });
     if (!parsed.ok) {
-      p.log(`orbit: retenci\xF3n de permisos desactivada (${parsed.errors.join("; ")})`);
+      p.log(`nod: retenci\xF3n de permisos desactivada (${parsed.errors.join("; ")})`);
       return void 0;
     }
     return new PermHolder({ config, perm: parsed.perm, io: this.permIo(p), verify: k1Verifier(() => this.watchKeys) });
@@ -7286,7 +7286,7 @@ ${text}`;
       const holdMs = await this.isAway(p) ? PERM_HOLD_MS_AWAY : void 0;
       return await h.hold(e, v, { sessionId: await p.sessionId(), signal, io: this.permIo(p), holdMs });
     } catch (err) {
-      p.log(`orbit: retenci\xF3n fall\xF3 (${String(err)})`);
+      p.log(`nod: retenci\xF3n fall\xF3 (${String(err)})`);
       return v;
     }
   }
@@ -7314,7 +7314,7 @@ ${text}`;
     await p.write(`${dir}/${AWAY_FILE}`, JSON.stringify({ away }) + "\n");
     await p.store.delete(AWAY_KEY);
   }
-  /** Lista configurada con `/orbit respuestas`; undefined = sin configurar (el reloj usa las suyas). */
+  /** Lista configurada con `/nod respuestas`; undefined = sin configurar (el reloj usa las suyas). */
   async loadReplies(p) {
     try {
       const f = await this.readStateFile(p, REPLIES_FILE);
@@ -7382,7 +7382,7 @@ ${text}`;
         for (const b64 of list) await this.onSay(p, control2, b64, keys, rt.config.instanceId, sess);
       }
     } catch (err) {
-      p.log(`orbit: respuestas del reloj desactivadas (${String(err)})`);
+      p.log(`nod: respuestas del reloj desactivadas (${String(err)})`);
     } finally {
       this.sayLoopRunning = false;
     }
@@ -7390,7 +7390,7 @@ ${text}`;
   async onSay(p, control2, b64, keys, instanceId2, sess) {
     const v = verifySay(b64uDecode2(b64), keys, Number(await p.now()) / 1e3, instanceId2, sess, this.saySeen);
     if (!v.ok) {
-      p.log(`orbit: respuesta del reloj descartada (${v.reason})`);
+      p.log(`nod: respuesta del reloj descartada (${v.reason})`);
       return;
     }
     this.saySeen.add(v.nonceHex);
@@ -7398,18 +7398,18 @@ ${text}`;
     if (plan.submitAfterTurn !== void 0) this.pendingRecap = plan.submitAfterTurn;
     if (plan.abort && this.currentTurnId !== void 0) {
       await control2.abortTurn(this.currentTurnId).catch(() => void 0);
-      p.log(`orbit: el reloj detuvo el turno${v.kind === "recap" ? " y pide un resumen" : ""}`);
+      p.log(`nod: el reloj detuvo el turno${v.kind === "recap" ? " y pide un resumen" : ""}`);
       if (this.pendingRecap !== void 0) p.after(3e3, () => void this.submitRecap(p, control2));
     } else if (v.kind === "stop") {
-      p.log("orbit: el reloj detuvo el turno");
+      p.log("nod: el reloj detuvo el turno");
     }
     if (plan.note !== void 0) {
       this.notes.push(plan.note);
-      p.log("orbit: nota del reloj para el turno en curso");
+      p.log("nod: nota del reloj para el turno en curso");
     }
     if (plan.submitNow !== void 0) {
       void control2.submitPrompt(plan.submitNow).catch(() => void 0);
-      p.log(`orbit: ${v.kind === "recap" ? "resumen pedido" : "prompt"} desde el reloj`);
+      p.log(`nod: ${v.kind === "recap" ? "resumen pedido" : "prompt"} desde el reloj`);
     }
   }
   /** Envía el "Detente y resume" pendiente si la sesión principal ya está libre. Nunca lanza. */
@@ -7419,9 +7419,9 @@ ${text}`;
     this.pendingRecap = void 0;
     try {
       await control2.submitPrompt(text);
-      p.log("orbit: resumen pedido desde el reloj");
+      p.log("nod: resumen pedido desde el reloj");
     } catch (err) {
-      p.log(`orbit: no se pudo pedir el resumen (${String(err)})`);
+      p.log(`nod: no se pudo pedir el resumen (${String(err)})`);
     }
   }
 };
@@ -7454,7 +7454,7 @@ function holdsInMode(mode) {
 }
 
 // src/hosts/claude/register.ts
-var orbit = new OrbitEngine();
+var orbit = new NodEngine();
 var env;
 var sessionId;
 var hostName;
@@ -7594,15 +7594,15 @@ async function bashCwd($, e) {
 function register(on, _options) {
   on("session.start", async ($, e, next) => {
     try {
-      await $.command.register({ name: "orbit", description: COMMAND_DESCRIPTION });
+      await $.command.register({ name: "nod", description: COMMAND_DESCRIPTION });
       sessionId = String(await $.session.id());
       await orbit.sessionStart(platform($), e, control($), await sessionPlace($));
     } catch (err) {
-      $.ui.log(`orbit: session.start fall\xF3 (${String(err)})`, { to: "debug" });
+      $.ui.log(`nod: session.start fall\xF3 (${String(err)})`, { to: "debug" });
     }
     return next(e);
   }).catch((_$, e, next) => next(e));
-  on("command.run", { command: "orbit" }, async ($, e) => ({ text: await orbit.command(platform($), String(e.args ?? "")) }));
+  on("command.run", { command: "nod" }, async ($, e) => ({ text: await orbit.command(platform($), String(e.args ?? "")) }));
   on("turn.start", async ($, e, next) => {
     await orbit.turnStart(platform($), e);
     return next(e);

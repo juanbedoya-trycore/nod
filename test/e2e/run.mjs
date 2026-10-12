@@ -3,7 +3,7 @@
 // LLAMA AL MODELO: no forma parte de `make check`. Objetivo documentado: `check-mod-e2e` (docs/install-mod.md).
 //   node mod/test/e2e/run.mjs            (requiere `npm --prefix mod run build` hecho)
 //   CLAUDE_BIN=... ORBIT_MODEL=haiku ... variables opcionales
-// Escenarios: personal (Bash que pide permiso + subagente + MCP + /orbit), work (lista blanca),
+// Escenarios: personal (Bash que pide permiso + subagente + MCP + /nod), work (lista blanca),
 // both (hooks HTTP de settings y mod a la vez: compara prompt_id con turn_id, U3), offline (servidor caido).
 import http from 'node:http'
 import fs from 'node:fs'
@@ -131,17 +131,17 @@ check('personal: Stop con last_assistant_message y usage', typeof stopEv?.ev.las
 const session = evs.find(e => e.ev.session_id)?.ev.session_id
 check('personal: session_id consistente en todos los eventos', evs.every(e => e.ev.session_id === session), session)
 
-console.log('\n== /orbit ==')
-const cmd = await run('command', '/orbit')
+console.log('\n== /nod ==')
+const cmd = await run('command', '/nod')
 check('orbit: muestra estado', /estado: (conectado|listo|eventos pendientes)/.test(cmd.out), (cmd.out.match(/estado: [^"\\]*/) ?? [''])[0])
 check('orbit: muestra cola y último error', /cola: \d+ eventos/.test(cmd.out) && /último error/.test(cmd.out))
 check('orbit: no filtra el token', !cmd.out.includes(TOKEN))
-const pause = await run('pause', '/orbit pause')
+const pause = await run('pause', '/nod pause')
 check('orbit pause: confirma la pausa', /en pausa/.test(pause.out))
 received = []
 const paused = await run('paused-run', 'Reply with the single word: hi')
 check('orbit pause: con la pausa persistida no se envía nada', !received.some(r => r.kind === 'mod'), `sobres=${received.length}`)
-const resume = await run('resume', '/orbit resume')
+const resume = await run('resume', '/nod resume')
 check('orbit resume: reanuda y los eventos retenidos se envían', /reanudado/.test(resume.out))
 void paused
 
@@ -179,13 +179,13 @@ mode = 'down'
 const off = await run('offline', 'Reply with the single word: hi')
 check('offline: el servidor caido no rompe la sesion', off.code === 0, `exit=${off.code}`)
 mode = 'ok'
-const after = await run('after-offline', '/orbit')
-check('offline: /orbit tras el fallo informa de la cola o del error', /cola: \d+ eventos/.test(after.out))
+const after = await run('after-offline', '/nod')
+check('offline: /nod tras el fallo informa de la cola o del error', /cola: \d+ eventos/.test(after.out))
 const flushed = modEvents()
 const fn = flushed.map(e => e.n)
 const sessions = new Set(flushed.map(e => e.ev.session_id))
 check('offline: al volver el servidor la cola persistida se reenvía (otra sesión) en orden de n', sessions.size >= 2 && fn.every((n, i) => i === 0 || n > fn[i - 1]), `eventos=${fn.length} sesiones=${sessions.size}`)
-const clean = await run('cleanup', '/orbit')
+const clean = await run('cleanup', '/nod')
 check('cleanup: solo queda en cola el SessionStart de la propia sesión, sin pausa', /cola: [01] eventos/.test(clean.out) && !/en pausa/.test(clean.out), (clean.out.match(/cola: \d+ eventos/) ?? [''])[0])
 
 server.close()

@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { COMMAND_NAME, PROTOCOL_VERSION, instanceLabel } from "../src/index.js";
 
 describe("constantes del protocolo", () => {
-  it("expone la versión 1 y el comando /orbit", () => {
+  it("expone la versión 1 y el comando /nod", () => {
     expect(PROTOCOL_VERSION).toBe(1);
-    expect(COMMAND_NAME).toBe("orbit");
+    expect(COMMAND_NAME).toBe("nod");
   });
 });
 

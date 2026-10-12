@@ -16,7 +16,7 @@ export function parseOrbitArgs(args: string): OrbitAction {
   return "invalid";
 }
 
-export const ORBIT_USAGE = "uso: /orbit [status | away | back | privacidad [completa|metadatos] | respuestas [añadir <texto>|quitar <n>|restablecer] | pause | resume | setup | pair | unpair <huella>]";
+export const ORBIT_USAGE = "uso: /nod [status | away | back | privacidad [completa|metadatos] | respuestas [añadir <texto>|quitar <n>|restablecer] | pause | resume | setup | pair | unpair <huella>]";
 
 function ago(now: number, at: number | undefined): string {
   if (at === undefined) return "nunca";
@@ -24,7 +24,7 @@ function ago(now: number, at: number | undefined): string {
   return s < 60 ? `hace ${s}s` : `hace ${Math.round(s / 60)}min`;
 }
 
-/** Texto de `/orbit`. Nunca incluye el token. */
+/** Texto de `/nod`. Nunca incluye el token. */
 export function formatStatus(cfg: Config | undefined, errors: string[], status: CollectorStatus | undefined, now: number): string {
   if (cfg === undefined || status === undefined) {
     return ["sin configurar (no se envía nada)", ...errors.map((e) => `  - ${e}`)].join("\n");
@@ -47,6 +47,6 @@ export function formatStatus(cfg: Config | undefined, errors: string[], status: 
     `  último error: ${status.lastError === undefined ? "ninguno" : `${status.lastError} (${ago(now, status.lastErrorAt)})`}`,
   ];
   if (status.duplicates > 0) lines.push(`  descartados por repetidos en el servidor: ${status.duplicates} (¿otra sesión con el mismo instance_id?)`);
-  if (status.paused) lines.push("  el envío está pausado: los eventos se acumulan en la cola; /orbit resume para reanudar");
+  if (status.paused) lines.push("  el envío está pausado: los eventos se acumulan en la cola; /nod resume para reanudar");
   return lines.join("\n");
 }

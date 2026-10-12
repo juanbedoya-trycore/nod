@@ -210,12 +210,12 @@ describe("emparejamiento automático (D)", () => {
     const tag = pairTag(K1, INST, hexDecode(WATCH.spki));
     const w = world([offerJson(WATCH, tag)], [entry(K1)]);
     expect((await autoPair(cfg, w.io, w.ring)).paired.length).toBe(1);
-    w.store.delete(PAIR_STORE_KEY(INST)); // /orbit unpair
+    w.store.delete(PAIR_STORE_KEY(INST)); // /nod unpair
     w.setOffers([offerJson(WATCH, tag)]); // alguien repite la oferta
     expect(await autoPair(cfg, w.io, w.ring)).toEqual({ armed: false, paired: [], rejected: 0 });
     expect(paired(w)).toEqual([]);
   });
-  it("ofertas sin tag: quedan para /orbit pair (flujo manual)", async () => {
+  it("ofertas sin tag: quedan para /nod pair (flujo manual)", async () => {
     const w = world([offerJson(WATCH)], [entry(K1)]);
     expect(await autoPair(cfg, w.io, w.ring)).toEqual({ armed: true, paired: [], rejected: 0 });
     expect(w.offers().length).toBe(1);

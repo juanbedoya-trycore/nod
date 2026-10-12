@@ -1,7 +1,7 @@
 {
-  "name": "orbit",
+  "name": "nod",
   "owner": { "name": "Juan Bedoya" },
   "plugins": [
-    { "name": "orbit", "source": "./", "description": "Tus sesiones de Claude Code en el reloj (Orbit)" }
+    { "name": "nod", "source": "./", "description": "Aprueba los permisos de Claude Code desde el reloj" }
   ]
 }

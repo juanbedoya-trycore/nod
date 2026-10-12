@@ -2,7 +2,7 @@
 export const PROTOCOL_VERSION = 1;
 
 /** Nombre del comando de barra que registra el plugin. */
-export const COMMAND_NAME = "orbit";
+export const COMMAND_NAME = "nod";
 
 /** Devuelve el identificador de instancia a partir de una ruta de proyecto (sin datos sensibles). */
 export function instanceLabel(projectPath: string): string {

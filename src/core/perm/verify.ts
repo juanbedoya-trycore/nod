@@ -47,7 +47,7 @@ export interface PendingDecision {
   resolved?: boolean | undefined;
 }
 
-/** Llave emparejada (confirmada por el usuario con `/orbit pair`). */
+/** Llave emparejada (confirmada por el usuario con `/nod pair`). */
 export interface PairedKey {
   kid: Uint8Array;
   spki: Uint8Array;
@@ -211,7 +211,7 @@ export function verifyDecision(
 /**
  * Adaptador al `DecisionVerifier` que inyecta hold.ts (K2): `(pending, decBytes, nowMs)` con `nowMs` en
  * milisegundos y resultado `{ ok }` / `{ ok: false, reason }` (reason = valor de `permResolved.reject`).
- * Las llaves se leen en cada llamada, así que un `/orbit unpair` surte efecto en la siguiente `dec`.
+ * Las llaves se leen en cada llamada, así que un `/nod unpair` surte efecto en la siguiente `dec`.
  */
 export function makeDecisionVerifier(
   pairedKeys: () => readonly PairedKey[] | Promise<readonly PairedKey[]>,

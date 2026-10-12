@@ -122,7 +122,7 @@ export interface HoldContext {
   signal?: AbortLike | undefined;
   /** Io de esta llamada (en el plugin, el `$` del hook actual). Por defecto, el de `HolderDeps`. */
   io?: PermIo | undefined;
-  /** Retención de esta llamada (p. ej. 90 s con `/orbit away`); por defecto `perm.holdMs`. */
+  /** Retención de esta llamada (p. ej. 90 s con `/nod away`); por defecto `perm.holdMs`. */
   holdMs?: number | undefined;
 }
 
@@ -195,7 +195,7 @@ export type WatchKeysResult = { ok: true; keys: PairedKey[] } | { ok: false; err
 /**
  * Llaves emparejadas desde texto: array JSON de SPKI DER en base64url (P-256 sin comprimir). Sin
  * llaves, ninguna dec del reloj se acepta (el permiso acaba en terminal o timeout).
- * Provisional hasta que el emparejamiento de K1 (`/orbit pair`) guarde las llaves: ver blockers.
+ * Provisional hasta que el emparejamiento de K1 (`/nod pair`) guarde las llaves: ver blockers.
  */
 export function parseWatchKeys(raw: string | undefined): WatchKeysResult {
   const text = (raw ?? "").trim();
@@ -315,7 +315,7 @@ export class PermHolder {
   private readonly retryMs: number;
   private readonly resolvedTimeoutMs: number;
   private readonly pendingTimeoutMs: number;
-  /** Últimas resoluciones (para /orbit y los tests). */
+  /** Últimas resoluciones (para /nod y los tests). */
   readonly reports: HoldReport[] = [];
 
   constructor(private readonly deps: HolderDeps) {

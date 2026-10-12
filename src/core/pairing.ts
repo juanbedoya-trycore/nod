@@ -2,9 +2,9 @@
 //
 // Modelo de confianza: el servidor y el teléfono NO son de confianza. El servidor solo guarda ofertas
 // (SPKI publicadas por el reloj a través del teléfono). El mod recalcula el `kid` de cada SPKI, enseña la
-// huella con `/orbit pair` y solo guarda una llave cuando el usuario la confirma con
-// `/orbit pair confirm <huella>` tras compararla con la que muestra el reloj. Las llaves emparejadas
-// viven en `$.store` (nunca en el servidor) y se revocan con `/orbit unpair <huella>`.
+// huella con `/nod pair` y solo guarda una llave cuando el usuario la confirma con
+// `/nod pair confirm <huella>` tras compararla con la que muestra el reloj. Las llaves emparejadas
+// viven en `$.store` (nunca en el servidor) y se revocan con `/nod unpair <huella>`.
 import { kidOf, spkiPoint } from "./perm/verify.js";
 import type { PairedKey } from "./perm/verify.js";
 
@@ -227,17 +227,17 @@ export type PairAction =
 
 export const PAIR_USAGE = [
   "uso:",
-  "  /orbit setup                     QR para el teléfono: lo configura y empareja el reloj solo",
-  "  /orbit pair                      ofertas pendientes del reloj, con su huella",
-  "  /orbit pair confirm <huella>     empareja la llave cuya huella coincide con la del reloj",
-  "  /orbit pair reject <huella>      descarta una oferta",
-  "  /orbit pair keys                 llaves emparejadas",
-  "  /orbit unpair <huella>           revoca una llave emparejada",
+  "  /nod setup                     QR para el teléfono: lo configura y empareja el reloj solo",
+  "  /nod pair                      ofertas pendientes del reloj, con su huella",
+  "  /nod pair confirm <huella>     empareja la llave cuya huella coincide con la del reloj",
+  "  /nod pair reject <huella>      descarta una oferta",
+  "  /nod pair keys                 llaves emparejadas",
+  "  /nod unpair <huella>           revoca una llave emparejada",
 ].join("\n");
 
 /**
- * Reconoce `/orbit pair …` y `/orbit unpair …` (los argumentos de `/orbit`, sin el nombre). Devuelve
- * `undefined` si no es un comando de emparejamiento, para que el resto de `/orbit` lo trate.
+ * Reconoce `/nod pair …` y `/nod unpair …` (los argumentos de `/nod`, sin el nombre). Devuelve
+ * `undefined` si no es un comando de emparejamiento, para que el resto de `/nod` lo trate.
  */
 export function parsePairCommand(args: string): PairAction | undefined {
   const parts = args.trim().split(/\s+/);
@@ -351,7 +351,7 @@ export async function runPairCommand(cfg: PairingConfig | undefined, io: Pairing
   if (action.kind === "list") {
     const { offers, dropped } = await fetchOffers(cfg, io);
     const lines: string[] = [];
-    if (offers.length === 0) lines.push("no hay ofertas de emparejamiento pendientes. Lo más fácil: /orbit setup y escanear el QR con el teléfono (o, en el reloj, Orbit > Emparejar).");
+    if (offers.length === 0) lines.push("no hay ofertas de emparejamiento pendientes. Lo más fácil: /nod setup y escanear el QR con el teléfono (o, en el reloj, Orbit > Emparejar).");
     else {
       lines.push(`ofertas pendientes (${offers.length}). Compara la huella con la que muestra el reloj:`);
       for (const o of offers) {
@@ -364,10 +364,10 @@ export async function runPairCommand(cfg: PairingConfig | undefined, io: Pairing
           `AVISO: hay ${offers.length} ofertas pendientes. Si solo has pedido emparejar un reloj, alguna no es tuya: confirma únicamente la que coincide con la huella y la hora que ves en el reloj.`,
         );
       }
-      lines.push("Si coincide ENTERA: /orbit pair confirm <huella>. Si no coincide, no la confirmes: /orbit pair reject <huella>.");
+      lines.push("Si coincide ENTERA: /nod pair confirm <huella>. Si no coincide, no la confirmes: /nod pair reject <huella>.");
     }
     if (dropped > 0) lines.push(`(${dropped} ofertas descartadas: SPKI inválido o kid que no corresponde a su llave)`);
-    lines.push(`llaves emparejadas: ${current.stored.length} (/orbit pair keys)`);
+    lines.push(`llaves emparejadas: ${current.stored.length} (/nod pair keys)`);
     return lines.join("\n");
   }
 
@@ -381,8 +381,8 @@ export async function runPairCommand(cfg: PairingConfig | undefined, io: Pairing
   if (current.stored.some((k) => k.kid === hex)) return `esa llave ya está emparejada: ${describe(action.kid)}`;
   const { offers } = await fetchOffers(cfg, io);
   const offer = offers.find((o) => hexOf(o.kid) === hex);
-  if (offer === undefined) return `no hay ninguna oferta pendiente con la huella ${fingerprint(action.kid).hex}. Lista: /orbit pair`;
-  if (current.stored.length >= MAX_PAIRED_KEYS) return `ya hay ${MAX_PAIRED_KEYS} llaves emparejadas: revoca alguna con /orbit unpair <huella>`;
+  if (offer === undefined) return `no hay ninguna oferta pendiente con la huella ${fingerprint(action.kid).hex}. Lista: /nod pair`;
+  if (current.stored.length >= MAX_PAIRED_KEYS) return `ya hay ${MAX_PAIRED_KEYS} llaves emparejadas: revoca alguna con /nod unpair <huella>`;
   await save([...current.stored, { kid: hex, spki: b64uEncode(offer.spki), label: offer.label, paired_at: now }]);
   const removed = await deleteOffer(cfg, io, offer.kid);
   return [

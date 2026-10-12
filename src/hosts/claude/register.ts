@@ -1,10 +1,10 @@
 // Adaptador de Claude Code (API de mods, claude >= 2.1.296). Traduce los eventos del motor a
-// OrbitEngine (../../core/engine.ts) y le da una Platform hecha con `$`. Lo propio de Claude vive aquí:
+// NodEngine (../../core/engine.ts) y le da una Platform hecha con `$`. Lo propio de Claude vive aquí:
 // el modo de permisos leído de la transcripción, las cifras de `$.session.usage` y el lugar de la sesión.
 //
 // Restricciones del sandbox (S1): sin Node ni DOM; `$` solo se pasa a funciones declaradas con
 // `function` al tope del fichero; `$.env.get` con nombre literal; el mod es siempre cliente HTTP.
-import { COMMAND_DESCRIPTION, OrbitEngine } from "../../core/engine.js";
+import { COMMAND_DESCRIPTION, NodEngine } from "../../core/engine.js";
 import type { Extra } from "../../core/engine.js";
 import type { OrbitEnv, Platform, SessionControl } from "../../core/platform.js";
 import { profileOf } from "../../core/links.js";
@@ -18,7 +18,7 @@ interface On {
   (event: string, matcher: Record<string, unknown>, hook: Hook): { catch: (handler: Hook) => unknown };
 }
 
-const orbit = new OrbitEngine();
+const orbit = new NodEngine();
 let env: Promise<OrbitEnv> | undefined;
 let sessionId: string | undefined;
 let hostName: string | undefined;
@@ -185,16 +185,16 @@ async function bashCwd($: Engine, e: any): Promise<string | undefined> {
 export function register(on: On, _options?: unknown): void {
   on("session.start", async ($, e, next) => {
     try {
-      await $.command.register({ name: "orbit", description: COMMAND_DESCRIPTION });
+      await $.command.register({ name: "nod", description: COMMAND_DESCRIPTION });
       sessionId = String(await $.session.id());
       await orbit.sessionStart(platform($), e, control($), await sessionPlace($));
     } catch (err) {
-      $.ui.log(`orbit: session.start falló (${String(err)})`, { to: "debug" });
+      $.ui.log(`nod: session.start falló (${String(err)})`, { to: "debug" });
     }
     return next(e);
   }).catch((_$, e, next) => next(e));
 
-  on("command.run", { command: "orbit" }, async ($, e) => ({ text: await orbit.command(platform($), String(e.args ?? "")) }));
+  on("command.run", { command: "nod" }, async ($, e) => ({ text: await orbit.command(platform($), String(e.args ?? "")) }));
 
   on("turn.start", async ($, e, next) => {
     await orbit.turnStart(platform($), e);

@@ -17,7 +17,7 @@ const r = await build({
   platform: "neutral",
   target: "es2022",
   legalComments: "none",
-  banner: { js: "// Orbit para Claude Code. Generado por scripts/bundle.mjs desde src/: no editar a mano." },
+  banner: { js: "// Nod para Claude Code. Generado por scripts/bundle.mjs desde src/: no editar a mano." },
   outfile: OUT,
   write: !check,
   logLevel: "warning",

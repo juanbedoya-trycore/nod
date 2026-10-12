@@ -3,11 +3,11 @@
 //
 // - `client.json` (directorio de estado del servidor) da la URL, el token, la instancia y el ctx al mod
 //   cuando no hay variables ORBIT_*.
-// - `/orbit setup` genera K (32 bytes aleatorios, un solo uso, 15 min), lo guarda en `$.store` y dibuja el QR
+// - `/nod setup` genera K (32 bytes aleatorios, un solo uso, 15 min), lo guarda en `$.store` y dibuja el QR
 //   `orbit://setup?v=1&u&i&t&k`. El teléfono lo escanea, pide la llave al reloj y publica la oferta con
 //   `tag = HMAC-SHA256(K, CBOR determinista de ["orbit-pair", 1, instance_id, spki])`.
 // - El mod empareja SIN pedir la huella una oferta cuyo `tag` verifica con un K vigente y no usado, y
-//   consume el K. Las ofertas sin `tag` (o con uno que no verifica) siguen el flujo manual de `/orbit pair`.
+//   consume el K. Las ofertas sin `tag` (o con uno que no verifica) siguen el flujo manual de `/nod pair`.
 //
 // Por qué es seguro: K solo viaja del Mac a la cámara del teléfono (nunca hacia el servidor), así que ni el
 // servidor ni quien publique ofertas sin autenticar puede fabricar un `tag` válido para SU llave: lo único
@@ -32,7 +32,7 @@ export const SETUP_K_LEN = 32;
 export const PAIR_TAG_LEN = 32;
 /** Vida de un K (y del QR que lo lleva). */
 export const SETUP_TTL_MS = 15 * 60_000;
-/** Cuánto espera `/orbit setup` a que llegue la oferta del teléfono. */
+/** Cuánto espera `/nod setup` a que llegue la oferta del teléfono. */
 export const SETUP_WAIT_MS = 120_000;
 export const MAX_SETUP_KEYS = 8;
 /** Clave de `$.store` con los K vigentes de una instancia (pairing.schema.json#/$defs/setupKeys). */
@@ -129,7 +129,7 @@ export function liveSetupKeys(keys: SetupKeyEntry[], instanceId: string, now: nu
 }
 
 /**
- * Dónde están los K: `$.store` (los de `/orbit setup`) y `setup.json` del directorio de estado (los de
+ * Dónde están los K: `$.store` (los de `/nod setup`) y `setup.json` del directorio de estado (los de
  * `orbit-server setup` y la página /setup). `consume` borra un K de su origen: un solo uso.
  */
 export interface SetupKeyring {

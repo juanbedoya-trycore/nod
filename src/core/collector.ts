@@ -110,7 +110,7 @@ export class Collector {
         // Otra instancia tiene otro espacio de n: reenviarlo con esta identidad sería incorrecto.
         this.queue.droppedTotal += stored.items.length;
         this.unreportedDrops += stored.items.length;
-        this.io.log(`orbit: se descartaron ${stored.items.length} eventos en cola de la instancia "${stored.instance_id}" (ahora es "${this.cfg.instanceId}")`);
+        this.io.log(`nod: se descartaron ${stored.items.length} eventos en cola de la instancia "${stored.instance_id}" (ahora es "${this.cfg.instanceId}")`);
       } else {
         // Si ctx pasó a work, lo que se guardó con ctx=personal se vuelve a filtrar antes de reenviarlo.
         const items = stored.items.map((it) => ({ ...it, ev: applyAllowlist(it.ev, effectiveCtx(this.cfg)) }));
@@ -211,7 +211,7 @@ export class Collector {
     }
     if (dup <= 0) return;
     this.duplicates += dup;
-    this.io.log(`orbit: el servidor descartó ${dup} eventos por repetidos (n ya visto; total ${this.duplicates}). Si no es un reenvío, otra sesión usa el mismo instance_id`);
+    this.io.log(`nod: el servidor descartó ${dup} eventos por repetidos (n ya visto; total ${this.duplicates}). Si no es un reenvío, otra sesión usa el mismo instance_id`);
   }
 
   private async fail(err: unknown, backoff = true): Promise<void> {
@@ -227,7 +227,7 @@ export class Collector {
   /** Nunca descartar en silencio: cada pérdida acaba en el log con su cuenta. */
   private reportLoss(): void {
     if (this.unreportedDrops === 0) return;
-    this.io.log(`orbit: se perdieron ${this.unreportedDrops} eventos (cola llena o rechazados; total perdidos: ${this.queue.droppedTotal})`);
+    this.io.log(`nod: se perdieron ${this.unreportedDrops} eventos (cola llena o rechazados; total perdidos: ${this.queue.droppedTotal})`);
     this.unreportedDrops = 0;
   }
 
@@ -245,7 +245,7 @@ export class Collector {
       else await this.io.save(STORE_KEYS.queue(this.cfg.instanceId), { v: 1, instance_id: this.cfg.instanceId, ...this.queue.toJSON() });
       this.persistedVersion = version;
     } catch (err) {
-      this.io.log(`orbit: no se pudo guardar la cola (${err instanceof Error ? err.message : String(err)})`);
+      this.io.log(`nod: no se pudo guardar la cola (${err instanceof Error ? err.message : String(err)})`);
     }
   }
 

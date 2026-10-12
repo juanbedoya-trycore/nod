@@ -1,5 +1,5 @@
 // Respuestas rápidas del reloj (SPEC §6.6.1): la lista que el reloj ofrece en una sesión. Se configura en el
-// mod con `/orbit respuestas …` y viaja al servidor en `orbit_replies` (SessionStart y cada Stop de la sesión
+// mod con `/nod respuestas …` y viaja al servidor en `orbit_replies` (SessionStart y cada Stop de la sesión
 // principal, solo ctx=personal); el reloj la recibe en `GET /v0/session` y, sin ella, usa la suya por defecto.
 // Cada respuesta sigue siendo un `say` firmado por el reloj: esta lista solo dice qué botones enseñar.
 
@@ -67,9 +67,9 @@ export type RepliesCommand =
   | { kind: "invalid"; why: string };
 
 export const REPLIES_USAGE =
-  "uso: /orbit respuestas [añadir <texto> | quitar <n> | restablecer]";
+  "uso: /nod respuestas [añadir <texto> | quitar <n> | restablecer]";
 
-/** `/orbit respuestas …` (también `replies`, `add`, `remove`, `reset`). undefined si no es este comando. */
+/** `/nod respuestas …` (también `replies`, `add`, `remove`, `reset`). undefined si no es este comando. */
 export function parseRepliesCommand(args: string): RepliesCommand | undefined {
   const m = /^\s*(respuestas|replies)(?:\s+([\s\S]*))?$/i.exec(args);
   if (m === null) return undefined;
@@ -101,7 +101,7 @@ export function applyRepliesCommand(current: readonly string[] | undefined, cmd:
       return { list: [...DEFAULT_REPLIES], changed: true, message: `restablecidas\n${show(DEFAULT_REPLIES)}` };
     case "add": {
       if (list.includes(cmd.text)) return { list, changed: false, message: `ya estaba\n${show(list)}` };
-      if (list.length >= REPLIES_MAX) return { list, changed: false, message: `ya hay ${REPLIES_MAX}: quita una antes (/orbit respuestas quitar <n>)` };
+      if (list.length >= REPLIES_MAX) return { list, changed: false, message: `ya hay ${REPLIES_MAX}: quita una antes (/nod respuestas quitar <n>)` };
       const next = [...list, cmd.text];
       return { list: next, changed: true, message: `añadida: ${cmd.text}\n${show(next)}` };
     }

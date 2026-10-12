@@ -28,7 +28,7 @@ describe("respuestas rápidas (§6.6.1)", () => {
     expect(readReplies(JSON.stringify(writeReplies(["Vale"])))).toEqual(["Vale"]);
   });
 
-  it("interpreta /orbit respuestas", () => {
+  it("interpreta /nod respuestas", () => {
     expect(parseRepliesCommand("status")).toBeUndefined();
     expect(parseRepliesCommand("respuestas")).toEqual({ kind: "list" });
     expect(parseRepliesCommand("replies list")).toEqual({ kind: "list" });

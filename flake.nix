@@ -1,5 +1,5 @@
 {
-  description = "Orbit para agentes de código: el mod de Claude Code y su módulo de home-manager";
+  description = "Nod: aprueba los permisos de tus agentes de código desde el reloj (plugin de Claude Code y módulo de home-manager)";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
@@ -13,7 +13,7 @@
     in {
       packages = cada (pkgs: rec {
         # El plugin listo para Claude Code (y su marketplace de un solo plugin). Sin Node: el bundle va versionado.
-        plugin = pkgs.runCommand "orbit-claude-plugin-${version}" { nativeBuildInputs = [ pkgs.jq ]; } ''
+        plugin = pkgs.runCommand "nod-claude-plugin-${version}" { nativeBuildInputs = [ pkgs.jq ]; } ''
           mkdir -p $out/.claude-plugin $out/hooks $out/bundle
           cp ${./.claude-plugin/marketplace.json} $out/.claude-plugin/marketplace.json
           jq --arg v "${version}+${rev}" '.version = $v' ${./.claude-plugin/plugin.json} > $out/.claude-plugin/plugin.json

@@ -42,7 +42,7 @@ export function parseConfig(raw: RawConfig): ConfigResult {
 /** Expiración de un permiso retenido (SPEC §6.5). */
 /** Retención por defecto: corta, porque en interactivo el diálogo del terminal espera a que termine (U1). */
 export const PERM_HOLD_MS_DEFAULT = 20_000;
-/** Retención con `/orbit away`: el usuario no está delante del Mac (la `exp` máxima de §6.5). */
+/** Retención con `/nod away`: el usuario no está delante del Mac (la `exp` máxima de §6.5). */
 export const PERM_HOLD_MS_AWAY = 90_000;
 /** Tope de la espera configurable: nunca más que la expiración de la spec. */
 export const PERM_HOLD_MS_MAX = 90_000;
@@ -51,7 +51,7 @@ export const PERM_HOLD_MS_MIN = 1_000;
 export interface RawPermConfig {
   /** ORBIT_PERM: "off" desactiva la retención (el veredicto `ask` pasa tal cual). Por defecto, activa. */
   enabled?: string | undefined;
-  /** ORBIT_PERM_HOLD_MS: cuánto se retiene fuera de `/orbit away` (1000..90000 ms); por defecto 20000. */
+  /** ORBIT_PERM_HOLD_MS: cuánto se retiene fuera de `/nod away` (1000..90000 ms); por defecto 20000. */
   holdMs?: string | undefined;
   /** ORBIT_FORBIDDEN: array JSON de regex que SUSTITUYE la lista "nunca desde el reloj". */
   forbidden?: string | undefined;

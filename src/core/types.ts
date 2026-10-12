@@ -27,7 +27,7 @@ export interface Config {
   instanceId: string;
   ctx: Ctx;
   /**
-   * Privacidad elegida en este perfil (`/orbit privacidad`). `metadatos` aplica la lista blanca de
+   * Privacidad elegida en este perfil (`/nod privacidad`). `metadatos` aplica la lista blanca de
    * ctx=work (§3.4) y el resumen de permisos solo con el verbo (§6.2) aunque la instancia sea personal.
    */
   privacy?: Privacy | undefined;
