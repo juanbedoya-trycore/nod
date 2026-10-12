@@ -9,9 +9,22 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci --no-audit --no-fund
       - run: npm run check
+  collector:
+    runs-on: ubuntu-latest
+    defaults:
+      run: { working-directory: collector }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: "clippy, rustfmt" }
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: collector }
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
   nix:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@v16
-      - run: nix build .#plugin
+      - run: nix build .#plugin .#collector
