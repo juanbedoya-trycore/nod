@@ -1,0 +1,1 @@
+{ "name": "nod-probe", "version": "0.0.1", "description": "Nod fase 0: registra en JSONL cada evento que ve el motor (NOD_PROBE_LOG)" }
