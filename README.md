@@ -1,6 +1,6 @@
 # Nod
 
-Nod observa tus sesiones de Claude Code y te da información de verdad sobre ellas: cuánto trabajó el agente,
+Nod observa tus sesiones de Claude Code y de OpenCode y te da información de verdad sobre ellas: cuánto trabajó el agente,
 cuánto tiempo estuvo esperándote, qué permisos negaste, cuántos tokens costó cada tarea, cuándo interrumpiste
 o reescribiste un prompt y cuánto te queda del límite de uso. Lo entrega como un flujo de eventos normalizado,
 **Nod v1** ([especificación](docs/nod-v1.md), [esquema](schema/nod-v1.schema.json)), a los destinos que elijas:
@@ -51,6 +51,40 @@ instala en los perfiles nuevos en cuanto aparecen. Si encuentra una versión ant
 | `programs.nod.collector.enable` | `false` | [nod-collector](#collector-y-panel-de-límites) como servicio, y Nod entregándole los eventos |
 | `programs.nod.collector.listen` | `127.0.0.1:8787` | Dónde escucha el collector |
 | `programs.nod.collector.tmux` | `false` | `nod-collector` en el PATH para la barra de tmux (la línea de tmux la pones tú) |
+| `programs.nod.opencode.enable` | `false` | Enlaza el plugin de OpenCode en `~/.config/opencode/plugins/nod.js` (no necesita `programs.nod.enable`) |
+| `programs.nod.opencode.pluginDir` | `opencode/plugins` | Su carpeta de plugins, relativa a `~/.config` (si usas `OPENCODE_CONFIG_DIR`) |
+
+### En OpenCode
+
+OpenCode (1.18 o más reciente) carga al arrancar los plugins de `~/.config/opencode/plugins/` (los de todos los
+proyectos) y de `<proyecto>/.opencode/plugins/` (solo ese). El plugin es un fichero, `bundle/opencode.js`:
+
+```sh
+mkdir -p ~/.config/opencode/plugins
+curl -fsSL https://raw.githubusercontent.com/juan52878911/nod/main/bundle/opencode.js -o ~/.config/opencode/plugins/nod.js
+```
+
+o, desde un clon, `cp bundle/opencode.js ~/.config/opencode/plugins/nod.js`. Con Nix,
+`programs.nod.opencode.enable = true` lo enlaza en cada `switch`. La configuración (`NOD_*`,
+`~/.config/nod/config.json`), la privacidad y Nod Control son los mismos; `source.host` es `opencode` y el
+perfil, el nombre del directorio de `OPENCODE_CONFIG_DIR` (o `opencode`). La cola y el resto del estado van en
+`~/.local/state/nod/opencode/<perfil>/`.
+
+Lo que cambia respecto de Claude Code, por lo que da la API de plugins de OpenCode:
+
+- **`/nod`**: un plugin de OpenCode no puede contestar un comando sin pasar por el modelo. Nod registra el
+  comando `/nod` y sustituye su prompt por la respuesta, con la orden de mostrarla tal cual: gasta una llamada
+  corta al modelo y cuenta como un prompt con `origin: "command"`.
+- **Permisos**: la espera es exacta también al aprobar (OpenCode publica cada respuesta). Lo que resuelven las
+  reglas `allow`/`deny` sin preguntar no se ve (OpenCode 1.18 no llama al hook `permission.ask`). En
+  `opencode run`, que rechaza solo lo que pregunta (o lo aprueba con `--auto`), sale como `by: "policy"`.
+- **Nod Control** funciona: mientras la TUI pregunta, un aprobador emparejado puede decidir y Nod contesta el
+  permiso por la API de OpenCode; gana lo primero que llegue, el humano o el aprobador. No hay modo auto.
+- **No hay**: edición del prompt (`recalled`, `revised`, `typing_ms`), límites de uso (`usage.limits`) ni
+  esfuerzo del modelo. `usage.cost_usd` es la suma del costo de los pasos vistos en el proceso.
+- **Subagentes**: los de la tool `task`, que en OpenCode son sesiones hijas; su `agent` es el id de esa sesión.
+- **Fin de sesión**: al salir de la TUI o al acabar `opencode run`. Un `opencode serve` que se mata con una
+  señal no avisa: lo que quede en la cola sale en la siguiente sesión.
 
 ## Qué mide
 
@@ -202,32 +236,38 @@ src/core/            el núcleo, sin agente
   platform.ts        lo que un agente tiene que dar (reloj, HTTP, almacén, ficheros, entropía)
   control/           Nod Control: firmas y CBOR, verificación, retención, mensajes, emparejamiento
 src/hosts/claude/    el adaptador de Claude Code (API de mods)
-bundle/claude.js     el adaptador empaquetado en un fichero: lo que carga el plugin (versionado)
+src/hosts/opencode/  el adaptador de OpenCode (API de plugins): adapter.ts traduce, node.ts es su Platform
+bundle/claude.js     el adaptador de Claude empaquetado en un fichero: lo que carga el plugin (versionado)
+bundle/opencode.js   el de OpenCode: lo que se copia a su carpeta de plugins (versionado)
 tools/probe/         sonda de la fase 0: registra todo lo que ve el motor (para validar nombres reales)
+tools/probe-opencode/ la misma sonda para OpenCode, y el script que anonimiza sus capturas
 nix/                 el módulo de home-manager
 collector/           nod-collector (Rust): ingesta, SQLite, report y limits
 ```
 
-Otro agente (OpenCode, Codex…) es otro adaptador en `src/hosts/<agente>/` sobre el mismo `NodEngine`.
+Otro agente (Codex…) es otro adaptador en `src/hosts/<agente>/` sobre el mismo `NodEngine`.
 
 ## Desarrollo
 
 ```sh
 npm ci
-npm run build          # tsc + bundle/claude.js
-npm test               # vitest; incluye la reproducción de una sesión real (test/fixtures)
-npm run check          # que bundle/claude.js corresponde a src/, y los tests (lo que corre el CI)
+npm run build          # tsc + bundle/claude.js y bundle/opencode.js
+npm test               # vitest; incluye la reproducción de sesiones reales de los dos agentes (test/fixtures)
+npm run check          # que los bundles corresponden a src/, y los tests (lo que corre el CI)
 claude plugin validate .
 claude --plugin-dir .  # probar sin instalar
 ```
 
-`bundle/claude.js` se versiona: tras cambiar `src/`, `npm run build` y commit del bundle.
+Los bundles se versionan: tras cambiar `src/`, `npm run build` y commit de los dos.
 
 El collector: `cd collector && cargo test && cargo clippy --all-targets -- -D warnings && cargo fmt --check`, y
 `nix build .#collector`.
 
 Para ver los eventos crudos de una versión nueva de Claude Code:
-`NOD_PROBE_LOG=/tmp/probe.jsonl claude --plugin-dir tools/probe`.
+`NOD_PROBE_LOG=/tmp/probe.jsonl claude --plugin-dir tools/probe`. De OpenCode: copia
+`tools/probe-opencode/probe.ts` a `<proyecto>/.opencode/plugins/` y lanza `NOD_PROBE_LOG=/tmp/probe.jsonl
+opencode`; `node tools/probe-opencode/anonimiza.mjs /tmp/probe.jsonl <proyecto>` deja la captura lista para
+`test/fixtures` (quita, entre otras cosas, la clave del proveedor que lleva `chat.params`).
 
 ## Licencia
 
