@@ -208,7 +208,7 @@ nix/                 el módulo de home-manager
 collector/           nod-collector (Rust): ingesta, SQLite, report y limits
 ```
 
-Otro agente (OpenCode, Codex…) es otro adaptador en `src/hosts/<agente>/` sobre el mismo `NodEngine`.
+Otro agente (OpenCode, Codex…) es otro adaptador en `src/hosts/<agente>/` sobre el mismo `NodEngine`. Cómo extender Nod (consumidores, aprobadores y adaptadores): [docs/extensiones.md](docs/extensiones.md).
 
 ## Desarrollo
 
