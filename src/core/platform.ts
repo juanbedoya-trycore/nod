@@ -25,7 +25,7 @@ export interface Platform {
   env: () => Promise<NodEnv>;
   now: () => Promise<number>;
   after: (ms: number, cb: () => void) => Timer;
-  fetch: (url: string, init: { method: string; headers: Record<string, string>; body: string }) => Promise<HttpResponse>;
+  fetch: (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => Promise<HttpResponse>;
   /** Almacén por perfil del agente (JSON). Guardar `null` lo borra. */
   store: {
     get: (key: string) => Promise<unknown>;
@@ -35,5 +35,22 @@ export interface Platform {
   read: (path: string) => Promise<string>;
   /** Añade texto al final de un fichero, creando el directorio si falta. Lanza si no pudo. */
   append: (path: string, text: string) => Promise<void>;
+  /** Sustituye el contenido de un fichero, creando el directorio si falta. Lanza si no pudo. */
+  write: (path: string, text: string) => Promise<void>;
+  /** n bytes de un generador criptográfico. Lanza si el agente no tiene ninguno. */
+  random: (n: number) => Promise<Uint8Array>;
   log: (message: string) => void;
+  /** Barra de estado del agente (undefined la quita). Sin superficie (p. ej. `-p`), no hace nada. */
+  status?: ((text: string | undefined) => void) | undefined;
+  /** Aviso breve al humano. */
+  toast?: ((text: string) => void) | undefined;
+  /** Lo que el canal de control hace con la sesión (docs/control-v1.md §4.2). */
+  session?: SessionControl | undefined;
+}
+
+export interface SessionControl {
+  /** Corta el turno en curso. */
+  abortTurn: (turnId: string) => Promise<void>;
+  /** Envía un prompt como si lo escribiera el humano. */
+  submitPrompt: (text: string) => Promise<void>;
 }

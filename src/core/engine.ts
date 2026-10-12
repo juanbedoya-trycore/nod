@@ -1,8 +1,11 @@
 // Nod, sin el agente: recibe lo que pasa en la sesión (ya en nombres neutros), lo normaliza a Nod v1, aplica
 // la privacidad, lo numera y lo entrega a cada destino. Cada adaptador (hosts/claude, …) llama a estos métodos
 // con su Platform. Los métodos públicos nunca lanzan: un fallo de Nod no puede romper la sesión.
-import { resolveConfig, configPath } from "./config.js";
-import type { Config } from "./config.js";
+import { resolveConfig, configPath, loadTokenFiles } from "./config.js";
+import type { Config, NodEnv } from "./config.js";
+import { ControlChannel } from "./control/channel.js";
+import type { ChannelContext, CheckInfo } from "./control/channel.js";
+import type { AbortLike } from "./control/hold.js";
 import { PRIVACY_LEVELS } from "./events.js";
 import type { Draft, NodEvent, Privacy, Source, Usage } from "./events.js";
 import { Normalizer } from "./normalize.js";
@@ -12,7 +15,7 @@ import type { Transport } from "./outbox.js";
 import { applyPrivacy, isStricter, sinkAllowed, stricter } from "./privacy.js";
 import type { HostInfo, Platform, Timer } from "./platform.js";
 
-export const COMMAND_DESCRIPTION = "Nod: estado de la sesión y de los destinos; /nod tarea <id>, /nod privacidad, /nod pausa, /nod reanuda";
+export const COMMAND_DESCRIPTION = "Nod: estado de la sesión, los destinos y el canal de control; /nod tarea, privacidad, pausa, reanuda, emparejar, aprobadores, lejos, cerca";
 
 const KEYS = {
   /** Id aleatorio y estable de este perfil en esta máquina: la instancia por defecto sin el nombre del equipo. */
@@ -25,11 +28,12 @@ const KEYS = {
 const URGENT = new Set(["turn.end", "session.end", "permission.request", "agent.end"]);
 
 export const USAGE = [
-  "uso: /nod [estado | tarea [<id> [título] | fin] | privacidad [completo|redactado|trabajo] | pausa | reanuda | ayuda]",
+  "uso: /nod [estado | tarea [<id> [título] | fin] | privacidad [completo|redactado|trabajo] | pausa | reanuda | emparejar | aprobadores [quitar <kid>] | lejos | cerca | ayuda]",
 ].join("\n");
 
 interface Runtime {
   info: HostInfo;
+  env: NodEnv;
   config: Config;
   warnings: string[];
   privacy: Privacy;
@@ -70,6 +74,10 @@ export class NodEngine {
   private seq = 0;
   /** Desde cuándo esta sesión (para emitir un session.start cuando el agente cambia de sesión sin avisar). */
   private started = new Set<string>();
+  /** Nod Control: retención de permisos, mensajes y emparejamiento (docs/control-v1.md). */
+  private readonly channel = new ControlChannel((p, session, id, decision) => {
+    void this.guard(p, "permission.remote", async (now) => this.norm.remoteDecision(now, session, id, decision));
+  });
 
   // ---------- lo que llama el adaptador ----------
 
@@ -80,6 +88,7 @@ export class NodEngine {
       this.stats = freshStats();
       const out = this.norm.sessionStart(now, session, info);
       if (rt.config.task !== undefined && this.norm.task === undefined) out.push(...this.norm.setTask(now, session, rt.config.task, undefined, "env"));
+      this.channel.sessionStarted(p, this.ctx(rt), session);
       return out;
     });
   }
@@ -96,7 +105,10 @@ export class NodEngine {
   }
 
   async turnStart(p: Platform, session: string, turn: string, agent?: string): Promise<void> {
-    await this.guard(p, "turn.start", async (now) => this.norm.turnStart(now, session, turn, agent));
+    await this.guard(p, "turn.start", async (now) => {
+      this.channel.turnStarted(turn, agent);
+      return this.norm.turnStart(now, session, turn, agent);
+    });
   }
 
   async step(p: Platform, session: string, s: StepInfo): Promise<void> {
@@ -107,6 +119,7 @@ export class NodEngine {
   async turnEnd(p: Platform, session: string, t: TurnEndInfo, usage?: () => Promise<UsageSnapshot | undefined>): Promise<void> {
     await this.guard(p, "turn.end", async (now) => {
       const out = this.norm.turnEnd(now, session, t);
+      this.channel.turnEnded(p, t.turn, t.agent);
       if (t.agent === undefined && usage !== undefined) {
         const u = await usage().catch(() => undefined);
         if (u !== undefined) out.push(...this.norm.usage(now, session, u));
@@ -121,6 +134,27 @@ export class NodEngine {
 
   async toolCheck(p: Platform, session: string, id: string, tool: string, decision: CheckDecision, reason?: string, checkMs?: number): Promise<void> {
     await this.guard(p, "tool.check", async (now) => this.norm.toolCheck(now, session, id, tool, decision, reason, checkMs));
+  }
+
+  /**
+   * Un permiso que el agente va a preguntar: con Nod Control activo, llaves emparejadas y un modo que no sea
+   * `auto`, se retiene hasta una decisión remota verificada, el plazo o la cancelación. Devuelve esa decisión
+   * (ya emitida como permission.decision by "remote") o undefined: el veredicto original sigue. Es el único sitio
+   * donde Nod cambia una decisión. `mode` se consulta solo si hace falta. Nunca lanza.
+   */
+  async checkPermission(p: Platform, session: string, c: CheckInfo, signal: AbortLike | undefined, mode: () => Promise<string | undefined>): Promise<"allow" | "deny" | undefined> {
+    try {
+      const rt = await this.getRuntime(p);
+      return await this.channel.check(p, this.ctx(rt), session, c, signal, mode);
+    } catch (err) {
+      p.log(`nod: retención falló (${String(err)})`);
+      return undefined;
+    }
+  }
+
+  /** Mensaje de un aprobador llegado a mitad de turno, para el resultado de una tool de la sesión principal. */
+  takeNote(agent: string | undefined): string | undefined {
+    return this.channel.takeNote(agent);
   }
 
   /** Duración de la ejecución de una tool, si el agente la da (antes de su resultado). */
@@ -153,6 +187,7 @@ export class NodEngine {
 
   async sessionEnd(p: Platform, session: string, reason: string): Promise<void> {
     await this.guard(p, "session.end", async (now) => this.norm.sessionEnd(now, session, reason));
+    this.channel.sessionEnded();
     this.started.delete(session);
     // Al cerrar se intenta entregar todo ya, con un plazo: lo que no salga queda guardado para la siguiente sesión.
     const rt = await this.runtime?.catch(() => undefined);
@@ -199,6 +234,7 @@ export class NodEngine {
       await p.store.set(KEYS.anonId, anonId);
     }
     const { config, warnings } = resolveConfig(env, text, info.profile, anonId as string);
+    await loadTokenFiles(config, (path) => p.read(path), warnings);
     // /nod privacidad solo puede endurecer lo que fija la configuración, nunca relajarlo.
     const stored = await p.store.get(KEYS.privacy);
     let privacy = config.privacy;
@@ -207,7 +243,7 @@ export class NodEngine {
       if (isStricter(config.privacy, stored as Privacy)) warnings.push(`la privacidad guardada (${String(stored)}) es más laxa que la de la configuración: uso ${config.privacy}`);
     }
     for (const w of warnings) p.log(`nod: ${w}`);
-    const rt: Runtime = { info, config, warnings, privacy, outboxes: [], paused: (await p.store.get(KEYS.paused)) === true };
+    const rt: Runtime = { info, env, config, warnings, privacy, outboxes: [], paused: (await p.store.get(KEYS.paused)) === true };
     for (const sink of config.sinks) {
       const transport: Transport = sink.kind === "file"
         ? async (envelope) => {
@@ -246,6 +282,10 @@ export class NodEngine {
     return s;
   }
 
+  private ctx(rt: Runtime): ChannelContext {
+    return { enabled: rt.config.enabled, config: rt.config.control, privacy: rt.privacy, instance: rt.config.instance, env: rt.env };
+  }
+
   private outboxIo(p: Platform) {
     return {
       now: () => p.now(),
@@ -277,6 +317,7 @@ export class NodEngine {
           this.session = first.session;
           this.stats = freshStats();
           this.norm.resetSession();
+          this.channel.sessionContinued(p, this.ctx(rt), first.session);
           const opening = this.norm.sessionStart(now, first.session, {});
           opening[0]!.data.continued = true;
           drafts.unshift(...opening);
@@ -375,7 +416,7 @@ export class NodEngine {
     const rt = await this.getRuntime(p);
     const [verb = "", ...rest] = args.split(/\s+/).filter(Boolean);
     const v = verb.toLowerCase();
-    if (v === "" || v === "estado" || v === "status") return this.statusText(rt, await p.now());
+    if (v === "" || v === "estado" || v === "status") return [this.statusText(rt, await p.now()), ...(await this.channel.statusLines(p, this.ctx(rt)))].join("\n");
     if (v === "ayuda" || v === "help" || v === "-h" || v === "--help") return HELP;
     if (v === "pausa" || v === "pause" || v === "reanuda" || v === "resume") {
       rt.paused = v === "pausa" || v === "pause";
@@ -404,7 +445,7 @@ export class NodEngine {
       else this.norm.task = id;
       return id === undefined ? "tarea cerrada: lo que sigue no se asocia a ninguna" : `tarea: ${id}${title ? ` (${title})` : ""}. Todo lo que siga en esta sesión cuenta para ella.`;
     }
-    return USAGE;
+    return (await this.channel.command(p, this.ctx(rt), v, rest)) ?? USAGE;
   }
 
   private statusText(rt: Runtime, now: number): string {
@@ -486,5 +527,9 @@ const HELP = [
   "  /nod tarea <id> [título]  asocia lo que sigue a una tarea (historia, ticket); /nod tarea fin la cierra",
   "  /nod privacidad <nivel>   completo, redactado o trabajo (solo destinos locales), en este perfil",
   "  /nod pausa · reanuda      deja de entregar (guarda en cola) y vuelve a entregar",
-  "Configuración: NOD_SINKS, NOD_PRIVACY, NOD_TASK… o ~/.config/nod/config.json (README).",
+  "Nod Control (aprobar permisos y mandar mensajes desde fuera, si hay controlador configurado):",
+  "  /nod emparejar            QR para emparejar un aprobador (móvil, reloj…)",
+  "  /nod aprobadores          llaves emparejadas; /nod aprobadores quitar <kid> revoca una",
+  "  /nod lejos · cerca        un permiso espera 90 s o hold_ms una decisión desde fuera (toda la máquina)",
+  "Configuración: NOD_SINKS, NOD_PRIVACY, NOD_TASK, NOD_CONTROL… o ~/.config/nod/config.json (README).",
 ].join("\n");

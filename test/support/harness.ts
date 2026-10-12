@@ -29,6 +29,11 @@ export interface Replay {
   files: Map<string, string>;
   store: Map<string, unknown>;
   command: (args: string) => Promise<string>;
+  /** Lo que Nod hizo con la sesión por Nod Control. */
+  aborted: string[];
+  prompts: string[];
+  /** Órdenes que lanzó por `$.process.run` (sin tee ni hostname). */
+  runs: string[][];
 }
 
 export interface ReplayOptions {
@@ -36,6 +41,12 @@ export interface ReplayOptions {
   httpStatus?: number;
   /** Contenido del fichero de configuración (NOD_CONFIG o ~/.config/nod/config.json). */
   configFile?: string;
+  /** Otros ficheros que puede leer el mod (approvers.json…); lo que escriba con `$.fs.write` acaba aquí. */
+  readable?: Record<string, string>;
+  /** Controlador de Nod Control: las peticiones cuya URL empieza por `base` van a `fetch`. */
+  controller?: { base: string; fetch: (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => Promise<{ status: number; ok: boolean; text: string }> };
+  /** Transcripción de la sesión: lo que devuelve el grep del modo de permisos. */
+  transcript?: string;
 }
 
 /** Ejecuta un hook: si es un generador (streaming), lo recorre hasta su valor de retorno. */
@@ -85,6 +96,10 @@ export async function replay(fixture: string, opts: ReplayOptions = {}): Promise
   const store = new Map<string, unknown>();
   const logs: string[] = [];
   const posts: Replay["posts"] = [];
+  const readable = new Map(Object.entries(opts.readable ?? {}));
+  const aborted: string[] = [];
+  const prompts: string[] = [];
+  const runs: string[][] = [];
   let now = rows[0]!.ts;
 
   const $ = {
@@ -105,8 +120,10 @@ export async function replay(fixture: string, opts: ReplayOptions = {}): Promise
       read: async (p: string) => {
         const cfg = env.NOD_CONFIG ?? `${env.HOME}/.config/nod/config.json`;
         if (opts.configFile !== undefined && p === cfg) return opts.configFile;
+        if (readable.has(p)) return readable.get(p);
         throw new Error(`ENOENT ${p}`);
       },
+      write: async (p: string, text: string) => void readable.set(p, text),
     },
     process: {
       run: async (argv: string[], o?: { stdin?: string }) => {
@@ -115,11 +132,16 @@ export async function replay(fixture: string, opts: ReplayOptions = {}): Promise
           return { exitCode: 0, stdout: o?.stdin ?? "" };
         }
         if (argv[0] === "hostname") return { exitCode: 0, stdout: "mbp\n" };
+        runs.push(argv);
+        if (argv[0] === "/usr/bin/grep" && opts.transcript !== undefined) {
+          return { exitCode: 0, stdout: [...opts.transcript.matchAll(/"permissionMode":"[A-Za-z]*"/g)].map((m) => m[0]).join("\n") };
+        }
         return { exitCode: 0, stdout: "" };
       },
     },
     http: {
-      fetch: async (url: string, init: { headers: Record<string, string>; body: string }) => {
+      fetch: async (url: string, init: { method: string; headers: Record<string, string>; body: string }) => {
+        if (opts.controller !== undefined && url.startsWith(opts.controller.base)) return opts.controller.fetch(url, init);
         posts.push({ url, headers: init.headers, body: JSON.parse(init.body) as Envelope });
         const status = opts.httpStatus ?? 200;
         return { status, ok: status < 300, text: "{}" };
@@ -134,6 +156,8 @@ export async function replay(fixture: string, opts: ReplayOptions = {}): Promise
       cwd: async () => "/Users/dev/proyecto",
     },
     command: { register: async () => undefined },
+    turn: { abort: async (o: { turnId: string }) => void aborted.push(o.turnId) },
+    prompt: { submit: async (o: { text: string }) => void prompts.push(o.text) },
     ui: { log: (m: string) => void logs.push(m), toast: () => undefined, status: () => undefined },
   };
 
@@ -172,5 +196,5 @@ export async function replay(fixture: string, opts: ReplayOptions = {}): Promise
     const h = registered.find((r) => r.event === "command.run" && r.matcher?.command === "nod")!;
     return String((await h.hook($, { command: "nod", args }, () => undefined)).text);
   };
-  return { envelopes, posts, logs, files, store, command };
+  return { envelopes, posts, logs, files, store, command, aborted, prompts, runs };
 }

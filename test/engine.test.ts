@@ -24,6 +24,8 @@ function fake(env: NodEnv = { HOME: "/h" }, store = new Map<string, unknown>()) 
       throw new Error("ENOENT");
     },
     append: async (path, text) => void files.set(path, (files.get(path) ?? "") + text),
+    write: async (path, text) => void files.set(path, text),
+    random: async (n) => new Uint8Array(n),
     log: () => undefined,
   };
   const envelopes = () => [...files.values()].flatMap((s) => s.split("\n").filter(Boolean).map((l) => JSON.parse(l) as Envelope));

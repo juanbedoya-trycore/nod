@@ -1,6 +1,7 @@
 // Adaptador de Claude Code (API de mods, claude >= 2.1.296): traduce los eventos del motor a NodEngine
-// (../../core/engine.ts) y le da una Platform hecha con `$`. Solo observa: nunca cambia lo que decide el motor.
-// Los nombres y campos de los eventos están comprobados con tools/probe (docs/nod-v1.md).
+// (../../core/engine.ts) y le da una Platform hecha con `$`. Observa sin cambiar nada, salvo en un sitio: con
+// Nod Control activo, `tool.check` espera a la retención y puede devolver la decisión de un aprobador
+// (docs/control-v1.md). Los nombres y campos de los eventos están comprobados con tools/probe (docs/nod-v1.md).
 //
 // Restricciones del sandbox: sin Node ni DOM; `register` declarada con `function`; `$` se escribe siempre
 // `$.noun.verb(...)` en la llamada; `$.env.get` con nombre literal.
@@ -9,6 +10,8 @@ import type { NodEnv } from "../../core/config.js";
 import type { HostInfo, Platform } from "../../core/platform.js";
 import type { SessionInfo, UsageSnapshot } from "../../core/normalize.js";
 import { usageOf } from "../../core/events.js";
+import { withContext } from "../../core/control/messages.js";
+import { MODE_CACHE_MS, lastMode, modeGrepArgs, transcriptPath } from "./mode.js";
 
 type Engine = any;
 type Hook = ($: Engine, e: any, next: any) => any;
@@ -22,7 +25,12 @@ const nod = new NodEngine();
 let env: Promise<NodEnv> | undefined;
 let info: Promise<HostInfo> | undefined;
 let sessionId: string | undefined;
+let sessionCwd: string | undefined;
 const madeDirs = new Set<string>();
+/** Modo de permisos que dio el hook clásico UserPromptSubmit (si la política deja que llegue). */
+let hookMode: string | undefined;
+let transcript: string | undefined;
+let modeCache: { at: number; session: string; mode: string | undefined } | undefined;
 
 /**
  * Lo que Claude Code devuelve al modelo cuando el humano niega un permiso (con `isError`). Anclado al principio:
@@ -39,6 +47,9 @@ async function readEnv($: Engine): Promise<NodEnv> {
     NOD_TASK: await $.env.get("NOD_TASK"),
     NOD_CONFIG: await $.env.get("NOD_CONFIG"),
     NOD_OFF: await $.env.get("NOD_OFF"),
+    NOD_CONTROL: await $.env.get("NOD_CONTROL"),
+    NOD_CONTROL_TOKEN: await $.env.get("NOD_CONTROL_TOKEN"),
+    NOD_FORBIDDEN_ADD: await $.env.get("NOD_FORBIDDEN_ADD"),
     HOME: await $.env.get("HOME"),
     XDG_CONFIG_HOME: await $.env.get("XDG_CONFIG_HOME"),
     XDG_STATE_HOME: await $.env.get("XDG_STATE_HOME"),
@@ -64,6 +75,32 @@ async function readInfo($: Engine): Promise<HostInfo> {
   return out;
 }
 
+async function mkdirFor($: Engine, path: string): Promise<void> {
+  const dir = path.slice(0, path.lastIndexOf("/"));
+  if (dir !== "" && !madeDirs.has(dir)) {
+    await $.process.run(["mkdir", "-p", dir]);
+    madeDirs.add(dir);
+  }
+}
+
+/** n bytes de un CSPRNG: `crypto.getRandomValues` si el sandbox lo tiene; si no, `openssl rand`. */
+async function randomBytes($: Engine, n: number): Promise<Uint8Array> {
+  const c = (globalThis as { crypto?: { getRandomValues?: (a: Uint8Array) => Uint8Array } }).crypto;
+  if (c !== undefined && typeof c.getRandomValues === "function") return c.getRandomValues(new Uint8Array(n));
+  const r = await $.process.run(["openssl", "rand", "-hex", String(n)]);
+  const hex = String(r?.stdout ?? "").trim();
+  if (!new RegExp(`^[0-9a-f]{${2 * n}}$`).test(hex)) throw new Error("sin generador aleatorio criptográfico");
+  return Uint8Array.from(hex.match(/../g)!.map((h: string) => parseInt(h, 16)));
+}
+
+function quiet(f: () => void): void {
+  try {
+    f();
+  } catch {
+    // sin superficie (p. ej. -p)
+  }
+}
+
 function platform($: Engine): Platform {
   return {
     info: () => (info ??= readInfo($).catch((err) => {
@@ -86,17 +123,64 @@ function platform($: Engine): Platform {
     },
     read: async (path) => String(await $.fs.read(path)),
     append: async (path, text) => {
-      const dir = path.slice(0, path.lastIndexOf("/"));
-      if (dir !== "" && !madeDirs.has(dir)) {
-        await $.process.run(["mkdir", "-p", dir]);
-        madeDirs.add(dir);
-      }
+      await mkdirFor($, path);
       const r = await $.process.run(["tee", "-a", path], { stdin: text });
       const code = r?.exitCode ?? r?.code ?? 0;
       if (code !== 0) throw new Error(`tee salió con ${code}: ${String(r?.stderr ?? "").trim()}`);
     },
+    write: async (path, text) => {
+      await mkdirFor($, path);
+      await $.fs.write(path, text);
+    },
+    random: (n) => randomBytes($, n),
     log: (message) => $.ui.log(message, { to: "debug" }),
+    status: (text) => quiet(() => $.ui.status(text)),
+    toast: (text) => quiet(() => $.ui.toast(text)),
+    session: {
+      abortTurn: async (turnId) => {
+        await $.turn.abort({ turnId });
+      },
+      submitPrompt: async (text) => {
+        await $.prompt.submit({ text, asUser: true });
+      },
+    },
   };
+}
+
+/**
+ * Modo de permisos de la sesión (ver mode.ts): el del hook clásico si llegó; si no, el último que escribió
+ * Claude Code en la transcripción (cacheado 2 s). undefined si no se sabe: entonces se retiene.
+ */
+async function sessionMode($: Engine): Promise<string | undefined> {
+  if (hookMode !== undefined) return hookMode;
+  try {
+    const now = Number(await $.clock.now());
+    const session = await currentSession($);
+    if (modeCache !== undefined && modeCache.session === session && now - modeCache.at < MODE_CACHE_MS) return modeCache.mode;
+    if (transcript === undefined || !transcript.endsWith(`/${session}.jsonl`)) {
+      const home = await $.env.get("HOME");
+      const configDir = (await $.env.get("CLAUDE_CONFIG_DIR")) || (home ? `${home}/.claude` : undefined);
+      const cwd = sessionCwd ?? (await $.session.cwd());
+      if (typeof configDir !== "string" || typeof cwd !== "string") return undefined;
+      transcript = transcriptPath(configDir, cwd, session);
+    }
+    let r = await $.process.run(modeGrepArgs(transcript));
+    if (lastMode(r?.stdout) === undefined) {
+      // La carpeta sale de la ruta real (/tmp → /private/tmp): se busca la transcripción por su nombre.
+      const projects = transcript.slice(0, transcript.lastIndexOf("/projects/") + "/projects".length);
+      const f = await $.process.run(["/usr/bin/find", projects, "-maxdepth", "2", "-name", `${session}.jsonl`]);
+      const found = typeof f?.stdout === "string" ? f.stdout.split("\n").find((l: string) => l.endsWith(".jsonl")) : undefined;
+      if (found !== undefined && found !== transcript) {
+        transcript = found;
+        r = await $.process.run(modeGrepArgs(found));
+      }
+    }
+    const mode = lastMode(r?.stdout);
+    modeCache = { at: now, session, mode };
+    return mode;
+  } catch {
+    return undefined;
+  }
 }
 
 async function currentSession($: Engine): Promise<string> {
@@ -144,6 +228,7 @@ export function register(on: On, _options?: unknown): void {
     try {
       await $.command.register({ name: "nod", description: COMMAND_DESCRIPTION });
       sessionId = String(await $.session.id());
+      sessionCwd = opt(e?.cwd);
       await nod.sessionStart(platform($), sessionId, await sessionInfo($, e));
     } catch (err) {
       $.ui.log(`nod: session.start falló (${String(err)})`, { to: "debug" });
@@ -227,7 +312,9 @@ export function register(on: On, _options?: unknown): void {
       const rejected = out?.isError === true && REJECTED_RE.test(typeof out?.result === "string" ? out.result : text);
       void nod.toolResult(platform($), session, { toolUseId: id, tool, ok: out?.isError !== true, rejected, outputChars: text.length });
     }
-    return out;
+    // Un mensaje de un aprobador llegado a mitad de turno: el modelo lo lee con este resultado, sin esperar.
+    const note = nod.takeNote(opt(e?.agentId));
+    return note === undefined ? out : withContext(out, note);
   }).catch((_$, e, next) => next(e));
 
   on("tool.check", async ($, e, next) => {
@@ -240,7 +327,22 @@ export function register(on: On, _options?: unknown): void {
       const checkMs = Math.max(0, Number(await $.clock.now()) - Number(await started));
       void nod.toolCheck(platform($), await currentSession($), id, String(e?.tool ?? "?"), d, opt(verdict?.reason), checkMs);
     }
+    // El único sitio donde Nod cambia una decisión: con Nod Control activo, un permiso preguntado espera una
+    // decisión remota firmada. Si no llega (plazo, cancelación, fallo), el terminal pregunta como siempre.
+    if (id !== undefined && d === "ask") {
+      const info = { toolUseId: id, tool: String(e?.tool ?? "?"), input: e?.input, agent: opt(e?.agentId) };
+      const remote = await nod.checkPermission(platform($), await currentSession($), info, next?.signal, () => sessionMode($));
+      if (remote === "allow") return { decision: "allow", reason: "aprobado desde fuera del terminal (Nod Control)" };
+      if (remote === "deny") return { decision: "deny", reason: "denegado desde fuera del terminal (Nod Control)" };
+    }
     return verdict;
+  }).catch((_$, e, next) => next(e));
+
+  // Modo de permisos (para no retener en auto mode). Si la política de plugins salta los hooks clásicos, no
+  // llega nunca y Nod lo lee de la transcripción.
+  on("classic.UserPromptSubmit", async (_$, e, next) => {
+    if (typeof e?.permission_mode === "string" && e.permission_mode !== "") hookMode = e.permission_mode;
+    return next(e);
   }).catch((_$, e, next) => next(e));
 
   // La duración real de la ejecución: con ella, el instante en que el humano aprobó un permiso es exacto.
