@@ -101,7 +101,7 @@ Tiempos en `*_ms`; tokens en `usage` = `{ "input", "output", "cache_read", "cach
 
 - **Permisos.** `by: "policy"`: el agente lo resolvió sin preguntar (reglas, modo, clasificador). `by: "user"`:
   hubo `permission.request` y el humano contestó; `wait_ms` va de la pregunta a la respuesta. `by: "remote"`:
-  lo decidió un aprobador externo a través del canal de control de Nod (aún no existe en v1.0; se reserva).
+  lo decidió un aprobador externo a través de Nod Control ([control-v1.md](control-v1.md)).
 - **Respuesta exacta.** El agente no avisa cuando el humano aprueba: Nod lo calcula como el fin de la tool menos
   su ejecución (en Claude, la duración del hook clásico `PostToolUse`). Si el agente no la da, `wait_ms` es una
   cota superior y `exact: false`. Las negativas siempre son exactas.
