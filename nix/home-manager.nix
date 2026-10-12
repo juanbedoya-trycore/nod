@@ -5,6 +5,9 @@
 # (orbit@orbit-local del instalador de Orbit y orbit@orbit): con dos activos, cada evento saldría dos
 # veces. No toca nada si la versión instalada ya es la del flake.
 #
+# programs.nod.opencode: enlaza el plugin de OpenCode (bundle/opencode.js) en su carpeta de plugins. No depende
+# de programs.nod.enable: se puede usar Nod solo en OpenCode.
+#
 # programs.nod.collector: nod-collector como servicio (launchd en macOS, systemd en Linux) y, salvo que
 # programs.nod.settings diga otra cosa, la configuración de Nod que le entrega los eventos.
 self:
@@ -118,6 +121,22 @@ in {
         también con el collector activado.
       '';
     };
+    opencode = {
+      enable = lib.mkEnableOption "Nod en OpenCode (enlaza el plugin en su carpeta de plugins)";
+      package = lib.mkOption {
+        type = lib.types.package;
+        default = self.packages.${pkgs.stdenv.hostPlatform.system}.opencode;
+        description = "El plugin de OpenCode (un directorio con nod.js).";
+      };
+      pluginDir = lib.mkOption {
+        type = lib.types.str;
+        default = "opencode/plugins";
+        description = ''
+          Carpeta de plugins de OpenCode, relativa a XDG_CONFIG_HOME (~/.config). Cámbiala si usas
+          OPENCODE_CONFIG_DIR con otro directorio.
+        '';
+      };
+    };
     collector = {
       enable = lib.mkEnableOption "nod-collector como servicio (`serve`), con Nod entregándole los eventos";
       package = lib.mkOption {
@@ -160,6 +179,11 @@ in {
         StandardOutPath = "${home}/Library/Logs/nod-sync.log";
       };
     };
+  })
+
+  (lib.mkIf cfg.opencode.enable {
+    # Solo el fichero: la carpeta de plugins puede tener otros (no se convierte en un enlace a la tienda).
+    xdg.configFile."${cfg.opencode.pluginDir}/nod.js".source = "${cfg.opencode.package}/nod.js";
   })
 
   (lib.mkIf (col.enable || col.tmux) {
