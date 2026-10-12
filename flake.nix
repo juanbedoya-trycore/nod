@@ -1,5 +1,5 @@
 {
-  description = "Nod: aprueba los permisos de tus agentes de código desde el reloj (plugin de Claude Code y módulo de home-manager)";
+  description = "Nod: observa tus sesiones con agentes de código y entrega eventos Nod v1 (plugin de Claude Code y módulo de home-manager)";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 

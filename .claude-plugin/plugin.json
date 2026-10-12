@@ -1,7 +1,7 @@
 {
   "name": "nod",
-  "version": "0.4.0",
-  "description": "Nod: aprueba los permisos de Claude Code desde el reloj. Lleva tus sesiones, subagentes y tools al reloj (Orbit) y retiene cada permiso hasta que respondas; /nod muestra el estado.",
+  "version": "0.5.0",
+  "description": "Nod: observa tus sesiones de Claude Code (turnos, tools, permisos, tokens, límites, señales humanas) y las entrega como eventos Nod v1 a tus destinos (fichero, collector, Orbit). /nod muestra el estado.",
   "author": { "name": "Juan Bedoya" },
   "license": "MIT"
 }

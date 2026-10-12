@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/juan52878911/nod/schema/nod-v1.schema.json",
+  "title": "Nod v1: sobre de eventos",
+  "description": "Ver docs/nod-v1.md. Los consumidores deben ignorar campos y tipos que no conozcan.",
+  "type": "object",
+  "required": ["nod", "source", "events"],
+  "properties": {
+    "nod": { "const": 1 },
+    "source": {
+      "type": "object",
+      "required": ["instance", "host", "profile", "privacy"],
+      "properties": {
+        "instance": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+        "host": { "type": "string", "minLength": 1 },
+        "host_version": { "type": "string" },
+        "machine": { "type": "string" },
+        "profile": { "type": "string", "minLength": 1 },
+        "privacy": { "enum": ["completo", "redactado", "trabajo"] }
+      }
+    },
+    "events": { "type": "array", "items": { "$ref": "#/$defs/event" } }
+  },
+  "$defs": {
+    "usage": {
+      "type": "object",
+      "required": ["input", "output", "cache_read", "cache_write"],
+      "properties": {
+        "input": { "type": "number", "minimum": 0 },
+        "output": { "type": "number", "minimum": 0 },
+        "cache_read": { "type": "number", "minimum": 0 },
+        "cache_write": { "type": "number", "minimum": 0 },
+        "model": { "type": "string" }
+      }
+    },
+    "event": {
+      "type": "object",
+      "required": ["seq", "ts", "type", "session", "data"],
+      "properties": {
+        "seq": { "type": "integer", "minimum": 1 },
+        "ts": { "type": "integer", "minimum": 0 },
+        "type": { "type": "string" },
+        "session": { "type": "string", "minLength": 1 },
+        "turn": { "type": "string" },
+        "agent": { "type": "string" },
+        "task": { "type": "string" },
+        "data": { "type": "object" }
+      },
+      "allOf": [
+        { "if": { "properties": { "type": { "const": "session.start" } } }, "then": { "properties": { "data": { "required": ["interactive"] } } } },
+        { "if": { "properties": { "type": { "const": "session.end" } } }, "then": { "properties": { "data": { "required": ["reason", "duration_ms"] } } } },
+        { "if": { "properties": { "type": { "const": "prompt.submit" } } }, "then": { "properties": { "data": { "required": ["origin", "chars"] } } } },
+        { "if": { "properties": { "type": { "const": "turn.step" } } }, "then": { "required": ["turn"], "properties": { "data": { "required": ["index", "tools", "usage"], "properties": { "usage": { "$ref": "#/$defs/usage" } } } } } },
+        { "if": { "properties": { "type": { "const": "turn.end" } } }, "then": { "required": ["turn"], "properties": { "data": { "required": ["outcome", "usage", "steps", "answer_chars"], "properties": { "usage": { "$ref": "#/$defs/usage" } } } } } },
+        { "if": { "properties": { "type": { "const": "tool.call" } } }, "then": { "properties": { "data": { "required": ["tool_use_id", "tool"] } } } },
+        { "if": { "properties": { "type": { "const": "tool.result" } } }, "then": { "properties": { "data": { "required": ["tool_use_id", "tool", "duration_ms", "ok", "rejected", "output_chars"] } } } },
+        { "if": { "properties": { "type": { "const": "permission.request" } } }, "then": { "properties": { "data": { "required": ["tool_use_id", "tool"] } } } },
+        {
+          "if": { "properties": { "type": { "const": "permission.decision" } } },
+          "then": { "properties": { "data": { "required": ["tool_use_id", "tool", "decision", "by", "wait_ms"], "properties": { "decision": { "enum": ["allow", "deny"] }, "by": { "enum": ["policy", "user", "remote", "timeout"] } } } } }
+        },
+        { "if": { "properties": { "type": { "const": "agent.spawn" } } }, "then": { "properties": { "data": { "required": ["agent", "type", "background"] } } } },
+        { "if": { "properties": { "type": { "const": "agent.end" } } }, "then": { "properties": { "data": { "required": ["agent", "duration_ms", "usage"] } } } },
+        { "if": { "properties": { "type": { "const": "command" } } }, "then": { "properties": { "data": { "required": ["name"] } } } },
+        { "if": { "properties": { "type": { "const": "task.set" } } }, "then": { "properties": { "data": { "required": ["task", "source"] } } } }
+      ]
+    }
+  }
+}

@@ -1,128 +1,174 @@
-import type { Config, Ctx } from "./types.js";
-import { DEFAULT_FORBIDDEN, compileRules } from "./perm/forbidden.js";
-import type { ForbiddenRule } from "./perm/forbidden.js";
+// Configuración de Nod: adónde mandar los eventos, con qué privacidad y con qué identidad.
+//
+// Orden de precedencia: variables NOD_* > sección del perfil en el fichero > fichero > valores por defecto.
+// Sin nada configurado, Nod escribe en un fichero local (~/.local/state/nod/events.jsonl) con privacidad
+// `completo`: funciona sin servidor y nada sale de la máquina.
+import { PRIVACY_LEVELS } from "./events.js";
+import type { Privacy } from "./events.js";
 
-export const INSTANCE_ID_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
+/** Variables que lee Nod. El adaptador las lee (en Claude, con nombres literales) y las pasa tal cual. */
+export interface NodEnv {
+  NOD_SINKS?: string | undefined;
+  NOD_TOKEN?: string | undefined;
+  NOD_PRIVACY?: string | undefined;
+  NOD_INSTANCE?: string | undefined;
+  NOD_TASK?: string | undefined;
+  NOD_CONFIG?: string | undefined;
+  NOD_OFF?: string | undefined;
+  HOME?: string | undefined;
+  XDG_CONFIG_HOME?: string | undefined;
+  XDG_STATE_HOME?: string | undefined;
+}
 
-export interface RawConfig {
-  url?: string | undefined;
+export interface SinkConfig {
+  kind: "file" | "http";
+  /** Ruta absoluta (file) o URL base (http, sin /v1/events). */
+  target: string;
   token?: string | undefined;
-  instanceId?: string | undefined;
-  ctx?: string | undefined;
 }
 
-export type ConfigResult = { ok: true; config: Config } | { ok: false; errors: string[] };
-
-/**
- * Valida la configuración que llega de las variables ORBIT_*. No hay valor por defecto para `ctx`:
- * un `ctx` olvidado no debe convertirse en "personal" (enviaría prompts de una máquina de trabajo).
- */
-export function parseConfig(raw: RawConfig): ConfigResult {
-  const errors: string[] = [];
-  const url = (raw.url ?? "").trim().replace(/\/+$/, "");
-  const token = (raw.token ?? "").trim();
-  const instanceId = (raw.instanceId ?? "").trim();
-  const ctx = (raw.ctx ?? "").trim();
-
-  if (url === "") errors.push("ORBIT_URL no está definida");
-  else if (!/^https?:\/\/[^\s/]+/.test(url)) errors.push("ORBIT_URL debe empezar por http:// o https://");
-  if (token === "") errors.push("ORBIT_TOKEN no está definida");
-  if (instanceId === "") errors.push("ORBIT_INSTANCE_ID no está definida");
-  else if (!INSTANCE_ID_RE.test(instanceId)) errors.push("ORBIT_INSTANCE_ID debe cumplir ^[a-z0-9][a-z0-9-]{0,31}$");
-  if (ctx === "") errors.push("ORBIT_CTX no está definida (personal | work)");
-  else if (ctx !== "personal" && ctx !== "work") errors.push("ORBIT_CTX debe ser personal o work");
-
-  if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, config: { url, token, instanceId, ctx: ctx as Ctx } };
-}
-
-// ---------- permisos desde el reloj (fase 2, K2; SPEC §6) ----------
-
-
-/** Expiración de un permiso retenido (SPEC §6.5). */
-/** Retención por defecto: corta, porque en interactivo el diálogo del terminal espera a que termine (U1). */
-export const PERM_HOLD_MS_DEFAULT = 20_000;
-/** Retención con `/nod away`: el usuario no está delante del Mac (la `exp` máxima de §6.5). */
-export const PERM_HOLD_MS_AWAY = 90_000;
-/** Tope de la espera configurable: nunca más que la expiración de la spec. */
-export const PERM_HOLD_MS_MAX = 90_000;
-export const PERM_HOLD_MS_MIN = 1_000;
-
-export interface RawPermConfig {
-  /** ORBIT_PERM: "off" desactiva la retención (el veredicto `ask` pasa tal cual). Por defecto, activa. */
-  enabled?: string | undefined;
-  /** ORBIT_PERM_HOLD_MS: cuánto se retiene fuera de `/nod away` (1000..90000 ms); por defecto 20000. */
-  holdMs?: string | undefined;
-  /** ORBIT_FORBIDDEN: array JSON de regex que SUSTITUYE la lista "nunca desde el reloj". */
-  forbidden?: string | undefined;
-  /** ORBIT_FORBIDDEN_ADD: array JSON de regex que se AÑADEN a la lista por defecto. */
-  forbiddenAdd?: string | undefined;
-}
-
-export interface PermConfig {
+export interface Config {
   enabled: boolean;
-  holdMs: number;
-  forbidden: ForbiddenRule[];
+  instance: string;
+  privacy: Privacy;
+  sinks: SinkConfig[];
+  task: string | undefined;
+  /** De dónde salió: para `/nod`. */
+  source: string;
 }
 
-export type PermConfigResult = { ok: true; perm: PermConfig } | { ok: false; errors: string[] };
+interface FileSection {
+  sinks?: unknown;
+  privacy?: unknown;
+  instance?: unknown;
+}
 
-function regexList(raw: string, name: string, errors: string[]): string[] | undefined {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    errors.push(`${name} debe ser un array JSON de expresiones regulares`);
+interface ConfigFile extends FileSection {
+  profiles?: Record<string, FileSection>;
+}
+
+export interface ConfigResult {
+  config: Config;
+  /** Avisos (valores ignorados): la configuración sigue siendo usable. */
+  warnings: string[];
+}
+
+const INSTANCE_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+
+export function configPath(env: NodEnv): string | undefined {
+  if (env.NOD_CONFIG) return expandHome(env.NOD_CONFIG, env.HOME);
+  if (env.XDG_CONFIG_HOME) return `${env.XDG_CONFIG_HOME}/nod/config.json`;
+  return env.HOME ? `${env.HOME}/.config/nod/config.json` : undefined;
+}
+
+export function defaultLogPath(env: NodEnv): string | undefined {
+  if (env.XDG_STATE_HOME) return `${env.XDG_STATE_HOME}/nod/events.jsonl`;
+  return env.HOME ? `${env.HOME}/.local/state/nod/events.jsonl` : undefined;
+}
+
+function expandHome(p: string, home: string | undefined): string {
+  return home !== undefined && (p === "~" || p.startsWith("~/")) ? home + p.slice(1) : p;
+}
+
+/** Un destino escrito como texto: `http(s)://…`, `file:/ruta` o una ruta absoluta (o con ~). */
+export function parseSink(raw: string, home: string | undefined, token?: string): SinkConfig | string {
+  const s = raw.trim();
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const u = new URL(s);
+      return { kind: "http", target: u.toString().replace(/\/+$/, ""), token };
+    } catch {
+      return `destino inválido: ${s}`;
+    }
+  }
+  const path = expandHome(s.startsWith("file:") ? s.slice(5).replace(/^\/\/(?=\/)/, "") : s, home);
+  if (path.startsWith("/")) return { kind: "file", target: path };
+  return `destino inválido (usa http://…, https://… o una ruta absoluta): ${s}`;
+}
+
+function sinksFrom(v: unknown, home: string | undefined, warnings: string[], where: string): SinkConfig[] | undefined {
+  if (v === undefined) return undefined;
+  if (!Array.isArray(v)) {
+    warnings.push(`${where}: "sinks" debe ser una lista`);
     return undefined;
   }
-  if (!Array.isArray(parsed) || !parsed.every((p) => typeof p === "string" && p !== "")) {
-    errors.push(`${name} debe ser un array JSON de expresiones regulares no vacías`);
-    return undefined;
+  const out: SinkConfig[] = [];
+  for (const item of v) {
+    const o = (typeof item === "string" ? { url: item } : item) as Record<string, unknown> | null;
+    const raw = typeof o?.url === "string" ? o.url : typeof o?.file === "string" ? o.file : undefined;
+    if (raw === undefined) {
+      warnings.push(`${where}: destino sin "url" ni "file"`);
+      continue;
+    }
+    const parsed = parseSink(raw, home, typeof o?.token === "string" ? o.token : undefined);
+    if (typeof parsed === "string") warnings.push(`${where}: ${parsed}`);
+    else out.push(parsed);
   }
-  return parsed as string[];
+  return out;
+}
+
+function privacyFrom(v: unknown, warnings: string[], where: string): Privacy | undefined {
+  if (v === undefined || v === "") return undefined;
+  if (typeof v === "string" && (PRIVACY_LEVELS as readonly string[]).includes(v)) return v as Privacy;
+  warnings.push(`${where}: privacidad "${String(v)}" no existe (completo, redactado, trabajo)`);
+  return undefined;
 }
 
 /**
- * Configuración de la retención de permisos. Un error NO desactiva el resto del mod, pero sí la
- * retención: sin una lista "nunca desde el reloj" fiable, el reloj no debe poder aprobar nada.
+ * Configuración efectiva. `fileText` es el contenido del fichero de configuración (undefined si no existe),
+ * `profile` el perfil del agente y `machine` el nombre corto de la máquina (para la instancia por defecto).
  */
-export function parsePermConfig(raw: RawPermConfig): PermConfigResult {
-  const errors: string[] = [];
-  const enabledRaw = (raw.enabled ?? "").trim().toLowerCase();
-  let enabled = true;
-  if (enabledRaw === "off" || enabledRaw === "0" || enabledRaw === "false") enabled = false;
-  else if (enabledRaw !== "" && enabledRaw !== "on" && enabledRaw !== "1" && enabledRaw !== "true")
-    errors.push("ORBIT_PERM debe ser on u off");
-
-  let holdMs = PERM_HOLD_MS_DEFAULT;
-  const holdRaw = (raw.holdMs ?? "").trim();
-  if (holdRaw !== "") {
-    const n = Number(holdRaw);
-    if (!Number.isInteger(n) || n < PERM_HOLD_MS_MIN || n > PERM_HOLD_MS_MAX)
-      errors.push(`ORBIT_PERM_HOLD_MS debe ser un entero entre ${PERM_HOLD_MS_MIN} y ${PERM_HOLD_MS_MAX}`);
-    else holdMs = n;
-  }
-
-  let forbidden: ForbiddenRule[] = [...DEFAULT_FORBIDDEN];
-  const replace = (raw.forbidden ?? "").trim();
-  if (replace !== "") {
-    const list = regexList(replace, "ORBIT_FORBIDDEN", errors);
-    if (list !== undefined) {
-      const r = compileRules(list, "custom-");
-      if (r.ok) forbidden = r.rules;
-      else errors.push(`ORBIT_FORBIDDEN: ${r.error}`);
+export function resolveConfig(env: NodEnv, fileText: string | undefined, profile: string, machine: string | undefined): ConfigResult {
+  const warnings: string[] = [];
+  let file: ConfigFile = {};
+  const path = configPath(env);
+  if (fileText !== undefined) {
+    try {
+      const parsed = JSON.parse(fileText) as unknown;
+      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) file = parsed as ConfigFile;
+      else warnings.push(`${path}: no es un objeto JSON`);
+    } catch (err) {
+      warnings.push(`${path}: JSON inválido (${String(err)})`);
     }
   }
-  const add = (raw.forbiddenAdd ?? "").trim();
-  if (add !== "") {
-    const list = regexList(add, "ORBIT_FORBIDDEN_ADD", errors);
-    if (list !== undefined) {
-      const r = compileRules(list, "extra-");
-      if (r.ok) forbidden = forbidden.concat(r.rules);
-      else errors.push(`ORBIT_FORBIDDEN_ADD: ${r.error}`);
+  const section: FileSection = (file.profiles && typeof file.profiles === "object" ? file.profiles[profile] : undefined) ?? {};
+
+  let sinks: SinkConfig[] | undefined;
+  if (env.NOD_SINKS !== undefined && env.NOD_SINKS.trim() !== "") {
+    sinks = [];
+    for (const raw of env.NOD_SINKS.split(/[\s,]+/).filter(Boolean)) {
+      const parsed = parseSink(raw, env.HOME, env.NOD_TOKEN || undefined);
+      if (typeof parsed === "string") warnings.push(`NOD_SINKS: ${parsed}`);
+      else sinks.push(parsed);
     }
   }
+  sinks ??= sinksFrom(section.sinks, env.HOME, warnings, `${path} (perfil ${profile})`);
+  sinks ??= sinksFrom(file.sinks, env.HOME, warnings, String(path));
+  if (sinks === undefined) {
+    const log = defaultLogPath(env);
+    sinks = log === undefined ? [] : [{ kind: "file", target: log }];
+  }
+  // NOD_TOKEN vale para los destinos http que no traen el suyo.
+  if (env.NOD_TOKEN) for (const s of sinks) if (s.kind === "http" && s.token === undefined) s.token = env.NOD_TOKEN;
 
-  if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, perm: { enabled, holdMs, forbidden } };
+  const privacy = privacyFrom(env.NOD_PRIVACY, warnings, "NOD_PRIVACY") ?? privacyFrom(section.privacy, warnings, `${path} (perfil ${profile})`) ?? privacyFrom(file.privacy, warnings, String(path)) ?? "completo";
+
+  const wanted = env.NOD_INSTANCE || (typeof section.instance === "string" ? section.instance : undefined) || (typeof file.instance === "string" ? file.instance : undefined);
+  let instance = defaultInstance(machine, profile);
+  if (wanted !== undefined) {
+    if (INSTANCE_RE.test(wanted)) instance = wanted;
+    else warnings.push(`instancia "${wanted}" inválida (minúsculas, cifras, . _ -; hasta 64): uso ${instance}`);
+  }
+
+  const source = env.NOD_SINKS ? "variables NOD_*" : fileText !== undefined ? String(path) : "valores por defecto";
+  const task = env.NOD_TASK?.trim() || undefined;
+  return { config: { enabled: env.NOD_OFF !== "1", instance, privacy, sinks, task, source }, warnings };
+}
+
+/** `mbp-personal`: máquina y perfil, en minúsculas y sin caracteres raros. */
+export function defaultInstance(machine: string | undefined, profile: string): string {
+  const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-._]+|[-._]+$/g, "");
+  const m = clean(machine ?? "") || "local";
+  const p = clean(profile) || "claude";
+  return `${m}-${p}`.slice(0, 64);
 }

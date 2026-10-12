@@ -1,8 +1,0 @@
-{
-  "name": "neg-entero-no-minimo",
-  "kind": "negative",
-  "spec": "§7",
-  "expect": "reject",
-  "check": "noncanonical",
-  "note": "Entero 5 codificado con 2 bytes (0x18 0x05) en vez de 1 byte. Debe rechazarse: no es el encoding más corto."
-}

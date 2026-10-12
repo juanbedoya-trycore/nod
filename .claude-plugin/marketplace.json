@@ -2,6 +2,6 @@
   "name": "nod",
   "owner": { "name": "Juan Bedoya" },
   "plugins": [
-    { "name": "nod", "source": "./", "description": "Aprueba los permisos de Claude Code desde el reloj" }
+    { "name": "nod", "source": "./", "description": "Observa tus sesiones de Claude Code y entrega eventos Nod v1" }
   ]
 }

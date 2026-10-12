@@ -73,7 +73,7 @@ let
   };
 in {
   options.programs.nod = {
-    enable = lib.mkEnableOption "Nod en Claude Code (aprobar permisos y seguir las sesiones desde el reloj)";
+    enable = lib.mkEnableOption "Nod en Claude Code (observa las sesiones y entrega eventos Nod v1)";
     package = lib.mkOption {
       type = lib.types.package;
       default = self.packages.${pkgs.stdenv.hostPlatform.system}.plugin;

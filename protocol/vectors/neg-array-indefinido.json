@@ -1,8 +1,0 @@
-{
-  "name": "neg-array-indefinido",
-  "kind": "negative",
-  "spec": "§7",
-  "expect": "reject",
-  "check": "noncanonical",
-  "note": "Array de longitud indefinida (0x9f ... 0xff). Solo se permiten longitudes definidas."
-}

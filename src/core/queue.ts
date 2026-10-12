@@ -1,34 +1,30 @@
-import type { IngestEvent } from "./types.js";
-
+/** Topes de la cola: se persiste en el almacén del agente (en Claude, `$.store`, con 4 MiB en total). */
 export interface QueueOptions {
-  /** Máximo de eventos retenidos. */
   maxEvents: number;
-  /** Máximo de bytes (JSON) retenidos: la cola se persiste en $.store, que admite 4 MiB en total. */
   maxBytes: number;
 }
 
-export const DEFAULT_QUEUE: QueueOptions = { maxEvents: 5000, maxBytes: 3_000_000 };
+export const DEFAULT_QUEUE: QueueOptions = { maxEvents: 5000, maxBytes: 1_000_000 };
 
-interface Entry {
-  item: IngestEvent;
+interface Entry<T> {
+  item: T;
   size: number;
 }
 
-export interface QueueSnapshot {
-  items: IngestEvent[];
+export interface QueueSnapshot<T> {
+  items: T[];
   dropped: number;
 }
 
 /**
- * Cola de eventos pendientes de enviar, ordenada por n. Al llegar al tope descarta los MÁS
- * VIEJOS y lo cuenta en `dropped`: la pérdida nunca es silenciosa (quien llama lee el valor
- * devuelto por `push` / `droppedTotal` y lo registra).
+ * Cola de pendientes de enviar, en orden de llegada. Al llegar al tope descarta los MÁS VIEJOS y lo cuenta
+ * en `droppedTotal`: la pérdida nunca es silenciosa.
  */
-export class OfflineQueue {
-  private entries: Entry[] = [];
+export class OfflineQueue<T> {
+  private entries: Entry<T>[] = [];
   private bytes = 0;
   droppedTotal = 0;
-  /** Se incrementa en cada cambio: sirve para saber si hay algo que persistir. */
+  /** Se incrementa en cada cambio: dice si hay algo que persistir. */
   version = 0;
 
   constructor(readonly opts: QueueOptions = DEFAULT_QUEUE) {}
@@ -41,41 +37,34 @@ export class OfflineQueue {
     return this.bytes;
   }
 
-  /** Añade un evento. Devuelve cuántos eventos viejos tuvo que descartar para caber. */
-  push(item: IngestEvent): number {
+  /** Añade uno. Devuelve cuántos viejos tuvo que descartar para caber. */
+  push(item: T): number {
     const size = JSON.stringify(item).length;
     this.entries.push({ item, size });
     this.bytes += size;
     this.version++;
-    return this.enforce();
-  }
-
-  private enforce(): number {
     let dropped = 0;
-    // Siempre se conserva al menos el evento más nuevo, aunque él solo supere maxBytes.
+    // Siempre se conserva al menos el más nuevo, aunque él solo supere maxBytes.
     while (this.entries.length > 1 && (this.entries.length > this.opts.maxEvents || this.bytes > this.opts.maxBytes)) {
-      const e = this.entries.shift()!;
-      this.bytes -= e.size;
+      this.bytes -= this.entries.shift()!.size;
       dropped++;
     }
     this.droppedTotal += dropped;
-    if (dropped > 0) this.version++;
     return dropped;
   }
 
-  /** Los primeros `max` eventos, sin quitarlos. */
-  peek(max: number): IngestEvent[] {
+  peek(max: number): T[] {
     return this.entries.slice(0, max).map((e) => e.item);
   }
 
-  /** Quita los primeros `count` (ya enviados). */
+  /** Quita los primeros `count` (entregados). */
   ack(count: number): void {
     const gone = this.entries.splice(0, count);
     for (const e of gone) this.bytes -= e.size;
     if (gone.length > 0) this.version++;
   }
 
-  /** Quita los primeros `count` por rechazo definitivo del servidor, contándolos como perdidos. */
+  /** Quita los primeros `count` por rechazo definitivo, contándolos como perdidos. */
   reject(count: number): number {
     const before = this.entries.length;
     this.ack(count);
@@ -84,16 +73,15 @@ export class OfflineQueue {
     return lost;
   }
 
-  toJSON(): QueueSnapshot {
+  toJSON(): QueueSnapshot<T> {
     return { items: this.entries.map((e) => e.item), dropped: this.droppedTotal };
   }
 
-  /** Recarga lo persistido (ordenado por n). Los que no caben se descartan y se cuentan. */
-  load(snapshot: QueueSnapshot): number {
-    this.droppedTotal = Math.max(this.droppedTotal, snapshot.dropped);
-    const items = [...snapshot.items].sort((a, b) => a.n - b.n);
+  /** Recarga lo persistido. Lo que no cabe se descarta y se cuenta. */
+  load(snapshot: QueueSnapshot<T>): number {
+    this.droppedTotal = Math.max(this.droppedTotal, Number(snapshot.dropped) || 0);
     let dropped = 0;
-    for (const it of items) dropped += this.push(it);
+    for (const it of snapshot.items) dropped += this.push(it);
     return dropped;
   }
 }
