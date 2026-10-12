@@ -1,0 +1,251 @@
+{
+  "spec": "docs/control-v1.md §3.1 y §4.1",
+  "note": "Emparejada: solo 'aprobador'. `now` en segundos Unix. `expect` = ok o el primer motivo de rechazo según el orden de §4.1.",
+  "paired": [
+    "b4aa8c3df3915b83"
+  ],
+  "cases": [
+    {
+      "name": "allow válido",
+      "pending": {
+        "instance": "personal-3fa9c2d1",
+        "id": "000102030405060708090a0b0c0d0e0f",
+        "tool_use_id": "toolu_01Lxyasfhk5BJPRM5TsXUe9F",
+        "tool": "Bash",
+        "summary": "touch aprobado.txt",
+        "wok": true,
+        "exp": 1791839000
+      },
+      "ah": "70556ad56970e6923cb3f6ba6f412e602981d03795e07485615d3d80e93cfe7e",
+      "signing_input": "876c6e6f642d6465636973696f6e0150000102030405060708090a0b0c0d0e0f781e746f6f6c755f30314c7879617366686b35424a50524d355473585565394665616c6c6f771a6acd4b0e582070556ad56970e6923cb3f6ba6f412e602981d03795e07485615d3d80e93cfe7e",
+      "decision": {
+        "decision": "allow",
+        "ts": 1791838990,
+        "kid": "tKqMPfORW4M",
+        "sig": "_CbNv4484jJoW699rppGq5iG0wTeAZEs93eMgLb_of4i1mN79fcKTCHSvysOtcYSDAhoAYg5newZxgLcZDJ9Vg"
+      },
+      "now": 1791838995,
+      "expect": "ok"
+    },
+    {
+      "name": "deny válido",
+      "pending": {
+        "instance": "personal-3fa9c2d1",
+        "id": "000102030405060708090a0b0c0d0e0f",
+        "tool_use_id": "toolu_01Lxyasfhk5BJPRM5TsXUe9F",
+        "tool": "Bash",
+        "summary": "touch aprobado.txt",
+        "wok": true,
+        "exp": 1791839000
+      },
+      "ah": "70556ad56970e6923cb3f6ba6f412e602981d03795e07485615d3d80e93cfe7e",
+      "signing_input": "876c6e6f642d6465636973696f6e0150000102030405060708090a0b0c0d0e0f781e746f6f6c755f30314c7879617366686b35424a50524d35547358556539466464656e791a6acd4b0e582070556ad56970e6923cb3f6ba6f412e602981d03795e07485615d3d80e93cfe7e",
+      "decision": {
+        "decision": "deny",
+        "ts": 1791838990,
+        "kid": "tKqMPfORW4M",
+        "sig": "0jgYuIBav_Iuq1a5Bu__GZigeNEshuPpJj1_f4hSV6Uig0bV0FPOUMGQ1m5OKW1lI-78a27sQFurU9LutQvPWw"
+      },
+      "now": 1791838995,
+      "expect": "ok"
+    },
+    {
+      "name": "llave no emparejada",
+      "pending": {
+        "instance": "personal-3fa9c2d1",
+        "id": "000102030405060708090a0b0c0d0e0f",
+        "tool_use_id": "toolu_01Lxyasfhk5BJPRM5TsXUe9F",
+        "tool": "Bash",
+        "summary": "touch aprobado.txt",
+        "wok": true,
+        "exp": 1791839000
+      },
+      "ah": "70556ad56970e6923cb3f6ba6f412e602981d03795e07485615d3d80e93cfe7e",
+      "signing_input": "876c6e6f642d6465636973696f6e0150000102030405060708090a0b0c0d0e0f781e746f6f6c755f30314c7879617366686b35424a50524d355473585565394665616c6c6f771a6acd4b0e582070556ad56970e6923cb3f6ba6f412e602981d03795e07485615d3d80e93cfe7e",
+      "decision": {
+        "decision": "allow",
+        "ts": 1791838990,
+        "kid": "qkqEUSNF_dA",
+        "sig": "NweGuLiP0wn4_AMBdIHxi6-TGdVkrrq4l8PNehYO5KY1hYauCXM5qQvRd4T-g229YvfOyFS1I2OMNNSSoVc-uA"
+      },
+      "now": 1791838995,
+      "expect": "kid"
+    },
+    {
+      "name": "firma sobre otro resumen (el controlador cambió lo que vio el aprobador)",
+      "pending": {
+        "instance": "personal-3fa9c2d1",
+        "id": "000102030405060708090a0b0c0d0e0f",
+        "tool_use_id": "toolu_01Lxyasfhk5BJPRM5TsXUe9F",
+        "tool": "Bash",
+        "summary": "touch aprobado.txt",
+        "wok": true,
+        "exp": 1791839000
+      },
+      "ah": "70556ad56970e6923cb3f6ba6f412e602981d03795e07485615d3d80e93cfe7e",
+      "signing_input": "876c6e6f642d6465636973696f6e0150000102030405060708090a0b0c0d0e0f781e746f6f6c755f30314c7879617366686b35424a50524d355473585565394665616c6c6f771a6acd4b0e582039ee59dc22504b0eab1bfd7db5ab1a558cf92738875acfb7cbdce69bbd7221e3",
+      "decision": {
+        "decision": "allow",
+        "ts": 1791838990,
+        "kid": "tKqMPfORW4M",
+        "sig": "2MvvCNO3CMdmZb8CVv297Ry9FkMeIRGnRNTIlLiorQNyfVKQPCExzBUAiznPDxbs14Cg3BuPDecLFXtm0S2wFw"
+      },
+      "now": 1791838995,
+      "expect": "sig"
+    },
+    {
+      "name": "firma sobre otro tool_use_id",
+      "pending": {
+        "instance": "personal-3fa9c2d1",
+        "id": "000102030405060708090a0b0c0d0e0f",
+        "tool_use_id": "toolu_01Lxyasfhk5BJPRM5TsXUe9F",
+        "tool": "Bash",
+        "summary": "touch aprobado.txt",
+        "wok": true,
+        "exp": 1791839000
+      },
+      "ah": "70556ad56970e6923cb3f6ba6f412e602981d03795e07485615d3d80e93cfe7e",
+      "signing_input": "876c6e6f642d6465636973696f6e0150000102030405060708090a0b0c0d0e0f6a746f6f6c755f6f74726f65616c6c6f771a6acd4b0e582064b8faa33bf22bcd6cc55ccf84b8b6c5e0aedbc816fd4ddbab9c0e7ec0b53b75",
+      "decision": {
+        "decision": "allow",
+        "ts": 1791838990,
+        "kid": "tKqMPfORW4M",
+        "sig": "7MYZhrJ5kZvvo8PkrEyuz3vBk02BHl1lBK3IjXnQWCAvXL_Bm-wNcnUlYLv80GbntsgFhdHzPp5opswBx5tQEg"
+      },
+      "now": 1791838995,
+      "expect": "sig"
+    },
+    {
+      "name": "ts más allá de exp + 30",
+      "pending": {
+        "instance": "personal-3fa9c2d1",
+        "id": "000102030405060708090a0b0c0d0e0f",
+        "tool_use_id": "toolu_01Lxyasfhk5BJPRM5TsXUe9F",
+        "tool": "Bash",
+        "summary": "touch aprobado.txt",
+        "wok": true,
+        "exp": 1791839000
+      },
+      "ah": "70556ad56970e6923cb3f6ba6f412e602981d03795e07485615d3d80e93cfe7e",
+      "signing_input": "876c6e6f642d6465636973696f6e0150000102030405060708090a0b0c0d0e0f781e746f6f6c755f30314c7879617366686b35424a50524d355473585565394665616c6c6f771a6acd4b37582070556ad56970e6923cb3f6ba6f412e602981d03795e07485615d3d80e93cfe7e",
+      "decision": {
+        "decision": "allow",
+        "ts": 1791839031,
+        "kid": "tKqMPfORW4M",
+        "sig": "sT-4Oh4IobBi_n13bqPqZ8KFNzsW9xURye6ZsiM5MqAbuPeOEQN5xpXtSeunGXFZC3LCFC4nJNZMV8w3P2fMjQ"
+      },
+      "now": 1791838995,
+      "expect": "expired"
+    },
+    {
+      "name": "ts en el margen (exp + 30)",
+      "pending": {
+        "instance": "personal-3fa9c2d1",
+        "id": "000102030405060708090a0b0c0d0e0f",
+        "tool_use_id": "toolu_01Lxyasfhk5BJPRM5TsXUe9F",
+        "tool": "Bash",
+        "summary": "touch aprobado.txt",
+        "wok": true,
+        "exp": 1791839000
+      },
+      "ah": "70556ad56970e6923cb3f6ba6f412e602981d03795e07485615d3d80e93cfe7e",
+      "signing_input": "876c6e6f642d6465636973696f6e0150000102030405060708090a0b0c0d0e0f781e746f6f6c755f30314c7879617366686b35424a50524d355473585565394665616c6c6f771a6acd4b36582070556ad56970e6923cb3f6ba6f412e602981d03795e07485615d3d80e93cfe7e",
+      "decision": {
+        "decision": "allow",
+        "ts": 1791839030,
+        "kid": "tKqMPfORW4M",
+        "sig": "n0OKR4atxT3grZ_68cVtg-lOaYWhXi3-QCi1zltTDXwmAh7II_oBgxK7Ism520r02qQZBC8li-84HLeQWCsipg"
+      },
+      "now": 1791838995,
+      "expect": "ok"
+    },
+    {
+      "name": "allow con wok false",
+      "pending": {
+        "instance": "personal-3fa9c2d1",
+        "id": "000102030405060708090a0b0c0d0e0f",
+        "tool_use_id": "toolu_forbidden",
+        "tool": "Bash",
+        "summary": "rm -rf build",
+        "wok": false,
+        "exp": 1791839000
+      },
+      "ah": "62f6857af96cecbbc3ef873621ccf1798186f5d5f80802862fdc544b17eebbc3",
+      "signing_input": "876c6e6f642d6465636973696f6e0150000102030405060708090a0b0c0d0e0f6f746f6f6c755f666f7262696464656e65616c6c6f771a6acd4b0e582062f6857af96cecbbc3ef873621ccf1798186f5d5f80802862fdc544b17eebbc3",
+      "decision": {
+        "decision": "allow",
+        "ts": 1791838990,
+        "kid": "tKqMPfORW4M",
+        "sig": "CS4eV2wcm4br3qmzoX2gEfP-6lTfApDxVx1BC2ktwJpMd5s0D05Q46lmfKBPyjx7FjECac7FmpYWifoFmsx7qw"
+      },
+      "now": 1791838995,
+      "expect": "forbidden"
+    },
+    {
+      "name": "deny con wok false vale",
+      "pending": {
+        "instance": "personal-3fa9c2d1",
+        "id": "000102030405060708090a0b0c0d0e0f",
+        "tool_use_id": "toolu_forbidden",
+        "tool": "Bash",
+        "summary": "rm -rf build",
+        "wok": false,
+        "exp": 1791839000
+      },
+      "ah": "62f6857af96cecbbc3ef873621ccf1798186f5d5f80802862fdc544b17eebbc3",
+      "signing_input": "876c6e6f642d6465636973696f6e0150000102030405060708090a0b0c0d0e0f6f746f6f6c755f666f7262696464656e6464656e791a6acd4b0e582062f6857af96cecbbc3ef873621ccf1798186f5d5f80802862fdc544b17eebbc3",
+      "decision": {
+        "decision": "deny",
+        "ts": 1791838990,
+        "kid": "tKqMPfORW4M",
+        "sig": "4F3Iimm5XzLf5e2Ztdb1STcoEUlYlIbvEJVbPT8pqaxFgC4Cyq9Sy-PJFotyFvWX3mSGZzXkYN7OsGx9tBfvGA"
+      },
+      "now": 1791838995,
+      "expect": "ok"
+    },
+    {
+      "name": "firma de 63 bytes",
+      "pending": {
+        "instance": "personal-3fa9c2d1",
+        "id": "000102030405060708090a0b0c0d0e0f",
+        "tool_use_id": "toolu_01Lxyasfhk5BJPRM5TsXUe9F",
+        "tool": "Bash",
+        "summary": "touch aprobado.txt",
+        "wok": true,
+        "exp": 1791839000
+      },
+      "ah": "70556ad56970e6923cb3f6ba6f412e602981d03795e07485615d3d80e93cfe7e",
+      "signing_input": "876c6e6f642d6465636973696f6e0150000102030405060708090a0b0c0d0e0f781e746f6f6c755f30314c7879617366686b35424a50524d355473585565394665616c6c6f771a6acd4b0e582070556ad56970e6923cb3f6ba6f412e602981d03795e07485615d3d80e93cfe7e",
+      "decision": {
+        "decision": "allow",
+        "ts": 1791838990,
+        "kid": "tKqMPfORW4M",
+        "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      },
+      "now": 1791838995,
+      "expect": "malformed"
+    },
+    {
+      "name": "decisión desconocida",
+      "pending": {
+        "instance": "personal-3fa9c2d1",
+        "id": "000102030405060708090a0b0c0d0e0f",
+        "tool_use_id": "toolu_01Lxyasfhk5BJPRM5TsXUe9F",
+        "tool": "Bash",
+        "summary": "touch aprobado.txt",
+        "wok": true,
+        "exp": 1791839000
+      },
+      "ah": "70556ad56970e6923cb3f6ba6f412e602981d03795e07485615d3d80e93cfe7e",
+      "signing_input": "876c6e6f642d6465636973696f6e0150000102030405060708090a0b0c0d0e0f781e746f6f6c755f30314c7879617366686b35424a50524d3554735855653946656d617962651a6acd4b0e582070556ad56970e6923cb3f6ba6f412e602981d03795e07485615d3d80e93cfe7e",
+      "decision": {
+        "decision": "maybe",
+        "ts": 1791838990,
+        "kid": "tKqMPfORW4M",
+        "sig": "uCn7kZIItnPJSmYKZ9k-I-b961WZU3JGrBz84MQMqvppBCt0AlYM2CWgsuwx78NPt3gO1JjZH1cirpj1_I-AnA"
+      },
+      "now": 1791838995,
+      "expect": "malformed"
+    }
+  ]
+}

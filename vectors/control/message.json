@@ -1,0 +1,110 @@
+{
+  "spec": "docs/control-v1.md §3.2 y §4.2",
+  "instance": "personal-3fa9c2d1",
+  "session": "6d4bbffb-b890-4286-a3a4-88446add6682",
+  "sid": "c2c6cc9d9411b5ee49f73ccc100e1116",
+  "now": 1791839030,
+  "paired": [
+    "b4aa8c3df3915b83"
+  ],
+  "cases": [
+    {
+      "name": "text válido",
+      "message": {
+        "id": "EBESExQVFhcYGRobHB0eHw",
+        "ts": 1791839000,
+        "sid": "wsbMnZQRte5J9zzMEA4RFg",
+        "kind": "text",
+        "text": "Continúa",
+        "kid": "tKqMPfORW4M",
+        "sig": "BxhbB-1gnjzG8PPaWJ_uFONIzCFeTRWJbJwsnhC3q3J6Fz7jcFb7UJU2RAuJtW79BoWErCvWmJKXrwaRqmQLEQ"
+      },
+      "signing_input": "886b6e6f642d6d6573736167650150101112131415161718191a1b1c1d1e1f1a6acd4b1871706572736f6e616c2d336661396332643150c2c6cc9d9411b5ee49f73ccc100e1116647465787469436f6e74696ec3ba61",
+      "expect": "ok"
+    },
+    {
+      "name": "stop válido",
+      "message": {
+        "id": "EBESExQVFhcYGRobHB0eHw",
+        "ts": 1791839000,
+        "sid": "wsbMnZQRte5J9zzMEA4RFg",
+        "kind": "stop",
+        "text": "",
+        "kid": "tKqMPfORW4M",
+        "sig": "PlzJYX_Vri1pSsU2pObEn4VCCVKNDVbxizKXeBJeS8VL1plNqt3bqRben2-nVGNFWMxR8z1HUEzKmWlASx5Diw"
+      },
+      "signing_input": "886b6e6f642d6d6573736167650150101112131415161718191a1b1c1d1e1f1a6acd4b1871706572736f6e616c2d336661396332643150c2c6cc9d9411b5ee49f73ccc100e11166473746f7060",
+      "expect": "ok"
+    },
+    {
+      "name": "recap válido",
+      "message": {
+        "id": "EBESExQVFhcYGRobHB0eHw",
+        "ts": 1791839000,
+        "sid": "wsbMnZQRte5J9zzMEA4RFg",
+        "kind": "recap",
+        "text": "",
+        "kid": "tKqMPfORW4M",
+        "sig": "ZI_OzkWV4omX3Wlxk4gJI-y4PPmvpbVXHr1e7aSNTaV4QwOJ8j6LzWrHw7AG3Eed53znAQKlu7NXSpuzNFsoqw"
+      },
+      "signing_input": "886b6e6f642d6d6573736167650150101112131415161718191a1b1c1d1e1f1a6acd4b1871706572736f6e616c2d336661396332643150c2c6cc9d9411b5ee49f73ccc100e111665726563617060",
+      "expect": "ok"
+    },
+    {
+      "name": "otra sesión",
+      "message": {
+        "id": "EBESExQVFhcYGRobHB0eHw",
+        "ts": 1791839000,
+        "sid": "EUn2Osy7bLDoutb2mpLY-w",
+        "kind": "text",
+        "text": "Continúa",
+        "kid": "tKqMPfORW4M",
+        "sig": "u2CYd1K9_TQh83kczeR8XHc1lrOFMeEAveBYfZLGu68fsYvzDcXg0WzVLV3Eu1b_XftSsyDO6QdOEjPqJl1OLw"
+      },
+      "signing_input": "886b6e6f642d6d6573736167650150101112131415161718191a1b1c1d1e1f1a6acd4b1871706572736f6e616c2d3366613963326431501149f63accbb6cb0e8bad6f69a92d8fb647465787469436f6e74696ec3ba61",
+      "expect": "sid"
+    },
+    {
+      "name": "demasiado viejo (> 120 s)",
+      "message": {
+        "id": "EBESExQVFhcYGRobHB0eHw",
+        "ts": 1791838909,
+        "sid": "wsbMnZQRte5J9zzMEA4RFg",
+        "kind": "text",
+        "text": "Continúa",
+        "kid": "tKqMPfORW4M",
+        "sig": "ZIGzL1m4A9kaGspUVXfHJFNOEExIzJOhNtX8ZQW0qj8FRTAYWFKgGqV5ghtnD_4Ba3dmi3_o9N9S8tIpYlsLyg"
+      },
+      "signing_input": "886b6e6f642d6d6573736167650150101112131415161718191a1b1c1d1e1f1a6acd4abd71706572736f6e616c2d336661396332643150c2c6cc9d9411b5ee49f73ccc100e1116647465787469436f6e74696ec3ba61",
+      "expect": "expired"
+    },
+    {
+      "name": "llave no emparejada",
+      "message": {
+        "id": "EBESExQVFhcYGRobHB0eHw",
+        "ts": 1791839000,
+        "sid": "wsbMnZQRte5J9zzMEA4RFg",
+        "kind": "text",
+        "text": "Continúa",
+        "kid": "qkqEUSNF_dA",
+        "sig": "SlxUt8jZfdd2cOebzPKC5wLtQGslKaQAw2Fr_awQricGYW7_g7m1chLeUf9qTr-aL6wf42fMQ6DCGIilCCjiEw"
+      },
+      "signing_input": "886b6e6f642d6d6573736167650150101112131415161718191a1b1c1d1e1f1a6acd4b1871706572736f6e616c2d336661396332643150c2c6cc9d9411b5ee49f73ccc100e1116647465787469436f6e74696ec3ba61",
+      "expect": "kid"
+    },
+    {
+      "name": "tipo desconocido",
+      "message": {
+        "id": "EBESExQVFhcYGRobHB0eHw",
+        "ts": 1791839000,
+        "sid": "wsbMnZQRte5J9zzMEA4RFg",
+        "kind": "borrar",
+        "text": "Continúa",
+        "kid": "tKqMPfORW4M",
+        "sig": "_sXM9jCa7VAibQmZoLA-jO1lnrh6xfekzjJrAFTHStc7Hi_6ildvjfl9InnuIGtXvvN6EISQgUdpCHnRKBF8EQ"
+      },
+      "signing_input": "886b6e6f642d6d6573736167650150101112131415161718191a1b1c1d1e1f1a6acd4b1871706572736f6e616c2d336661396332643150c2c6cc9d9411b5ee49f73ccc100e111666626f7272617269436f6e74696ec3ba61",
+      "expect": "malformed"
+    }
+  ]
+}

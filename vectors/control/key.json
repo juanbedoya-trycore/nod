@@ -1,0 +1,20 @@
+{
+  "spec": "docs/control-v1.md §3",
+  "note": "Llaves de PRUEBA: d = SHA-256 de la semilla, que es pública. Nunca cuentan como emparejadas fuera de los tests.",
+  "keys": [
+    {
+      "name": "aprobador",
+      "seed": "nod-test-key-1",
+      "d": "f1b3826eb90777da6954b3172870ebdc410dd49ec7f1b9e86a42357ebb54645f",
+      "spki": "3059301306072a8648ce3d020106082a8648ce3d03010703420004d4566f968ce9337b42a27797a768f12d9450a75cb6ea8ce1f54c2dd28014a4d5178468c72db1618249776289740e3aa808e45f96d5b193800e880151bfe69ea0",
+      "kid": "b4aa8c3df3915b83"
+    },
+    {
+      "name": "otra",
+      "seed": "nod-test-key-2",
+      "d": "1afea314da8a07dc4eab1f5416c65a69cba03656651fd04195d0a1411c81466c",
+      "spki": "3059301306072a8648ce3d020106082a8648ce3d0301070342000449494f6c09d1fe7f6ea6e90dcebf461a53f49943118f29e378978953962763d20410fc8b0af15cb06f127020e11865ca51edc93be83564aab285efbececbc7d6",
+      "kid": "aa4a84512345fdd0"
+    }
+  ]
+}

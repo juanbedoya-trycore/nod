@@ -1,0 +1,31 @@
+{
+  "spec": "docs/control-v1.md §3.3 y §4.3",
+  "k": "sYv-DaG0Knr_meAmy8JoOtwxvWvyaQW2ke9ssnYi_do",
+  "instance": "personal-3fa9c2d1",
+  "cases": [
+    {
+      "name": "válido",
+      "spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE1FZvlozpM3tConeXp2jxLZRQp1y26ozh9Uwt0oAUpNUXhGjHLbFhgkl3Yol0DjqoCORfltWxk4AOiAFRv-aeoA",
+      "tag": "oZIKT83WzVLMHZyGid26hdh48HinNwP5Uqa1YvM5u3A",
+      "expect": true
+    },
+    {
+      "name": "otro K",
+      "spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE1FZvlozpM3tConeXp2jxLZRQp1y26ozh9Uwt0oAUpNUXhGjHLbFhgkl3Yol0DjqoCORfltWxk4AOiAFRv-aeoA",
+      "tag": "cfheRcFbpqJD-6EULOSK7B0UEedotFXdh3P3pzx0wq4",
+      "expect": false
+    },
+    {
+      "name": "otra instancia",
+      "spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE1FZvlozpM3tConeXp2jxLZRQp1y26ozh9Uwt0oAUpNUXhGjHLbFhgkl3Yol0DjqoCORfltWxk4AOiAFRv-aeoA",
+      "tag": "BJY2Nuoqfj1Il6EE1NI_czhjOiuVJ_qOaaV3jwUCxWk",
+      "expect": false
+    },
+    {
+      "name": "tag sobre otra llave",
+      "spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAESUlPbAnR_n9upukNzr9GGlP0mUMRjynjeJeJU5YnY9IEEPyLCvFcsG8ScCDhGGXKUe3JO-g1ZKqyhe--zsvH1g",
+      "tag": "oZIKT83WzVLMHZyGid26hdh48HinNwP5Uqa1YvM5u3A",
+      "expect": false
+    }
+  ]
+}

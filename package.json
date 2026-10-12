@@ -6,7 +6,10 @@
     "test": "vitest run",
     "build": "tsc -p tsconfig.json && node scripts/bundle.mjs",
     "check:bundle": "tsc -p tsconfig.json --noEmit && node scripts/bundle.mjs --check",
-    "check": "npm run check:bundle && npm test"
+    "check": "npm run check:bundle && npm test",
+    "vendor:noble": "node scripts/vendor-noble.mjs",
+    "vendor:qr": "node scripts/vendor-qr.mjs",
+    "vectors": "node scripts/gen-control-vectors.mjs"
   },
   "type": "module",
   "devDependencies": {
@@ -14,7 +17,9 @@
     "ajv": "^8.17.1",
     "esbuild": "0.28.2",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "@noble/curves": "2.4.0",
+    "qrcode-generator": "2.0.4"
   },
   "private": true,
   "files": [
