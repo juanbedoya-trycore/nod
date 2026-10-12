@@ -157,6 +157,11 @@ export class NodEngine {
     }
   }
 
+  /** El agente dice quién decidió un permiso y cuándo (si no lo dice, se deduce del resultado de la tool). */
+  async permissionDecided(p: Platform, session: string, id: string, tool: string, decision: "allow" | "deny", by: "user" | "policy"): Promise<void> {
+    await this.guard(p, "permission.decision", async (now) => this.norm.decided(now, session, id, tool, decision, by));
+  }
+
   /** Mensaje de un aprobador llegado a mitad de turno, para el resultado de una tool de la sesión principal. */
   takeNote(agent: string | undefined): string | undefined {
     return this.channel.takeNote(agent);

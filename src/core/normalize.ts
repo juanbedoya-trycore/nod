@@ -330,6 +330,21 @@ export class Normalizer {
     return [this.decision(ts, session, id, p, decision, "remote")];
   }
 
+  /**
+   * El agente avisa de quién decidió un permiso y en qué instante (OpenCode publica la respuesta). Con eso no hace
+   * falta deducirla del resultado de la tool: la espera es exacta. Si ya estaba decidido (p. ej. por un aprobador
+   * remoto, cuya respuesta vuelve luego como la de cualquiera), no emite nada.
+   */
+  decided(ts: number, session: string, id: string, tool: string, decision: "allow" | "deny", by: "user" | "policy"): Draft[] {
+    let p = this.tools.get(id);
+    if (p === undefined) {
+      p = { tool, agent: undefined, turn: undefined, callTs: ts };
+      this.tools.set(id, p);
+    }
+    if (p.decidedTs !== undefined) return [];
+    return [this.decision(ts, session, id, p, decision, by)];
+  }
+
   /** `exact` = false: el instante de la respuesta no se vio y `wait_ms` es una cota superior. */
   private decision(ts: number, session: string, id: string, p: PendingTool, decision: "allow" | "deny", by: string, exact = true): Draft {
     p.decidedTs = ts;
