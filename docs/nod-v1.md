@@ -80,7 +80,7 @@ Tiempos en `*_ms`; tokens en `usage` = `{ "input", "output", "cache_read", "cach
 
 | `type` | Cuándo | `data` |
 | --- | --- | --- |
-| `session.start` | empieza la sesión | `interactive`; *opc.*: `cwd`, `repo` {`root`, `remote`, `name`}, `model`, `surface` (`terminal`, `ide`…), `continued` (`true`: el agente cambió de sesión sin anunciarlo, p. ej. tras `/clear`) |
+| `session.start` | empieza la sesión | `interactive`; *opc.*: `cwd`, `repo` {`root`, `remote`, `name`, `branch`}, `model`, `surface` (`terminal`, `ide`…), `continued` (`true`: el agente cambió de sesión sin anunciarlo, p. ej. tras `/clear`) |
 | `session.end` | termina | `reason` (`exit`, `clear`…), `duration_ms` |
 | `prompt.submit` | se envía un prompt | `origin` (`composer` = el humano; `task-notification`, `queue`… = otros), `chars`; *opc.*: `text`, `edit` {`events`, `typing_ms`, `recalled`, `revised`} (solo en `composer`) |
 | `turn.start` | empieza un turno de la sesión principal (los subagentes no lo tienen) | — |
@@ -94,7 +94,8 @@ Tiempos en `*_ms`; tokens en `usage` = `{ "input", "output", "cache_read", "cach
 | `agent.end` | acaba un turno del subagente | `agent`, `duration_ms`, `usage` (acumulado desde su arranque; si hay varios, vale el último) |
 | `usage` | instantánea de consumo, al final de cada turno principal | al menos uno de: `context` {`tokens`, `window`, `percent`}, `limits` [{`kind` (`five_hour`, `seven_day`; otros posibles), `percent_used` (0–100), `resets_at` opc. (ISO 8601)}], `cost_usd` (acumulado de la sesión **en este proceso**: al reanudarla en otro proceso vuelve a empezar) |
 | `command` | el humano ejecuta un comando de barra | `name` (sin argumentos) |
-| `task.set` | cambia la tarea | `task` (`null` = tarea cerrada), `source` (`command`, `env`); *opc.*: `title` |
+| `task.set` | cambia la tarea | `task` (`null` = tarea cerrada), `source` (`command`, `env`, `branch`); *opc.*: `title` |
+| `vcs.commit` | un comando de la sesión creó un commit (p. ej. `git commit` desde Bash) | `sha` (completo o abreviado, como lo dio git), *opc.*: `branch`, `repo` (nombre), `tool_use_id`, `files` (número de ficheros cambiados) |
 
 ### 3.1 Reglas de derivación
 
@@ -127,12 +128,17 @@ Tiempos en `*_ms`; tokens en `usage` = `{ "input", "output", "cache_read", "cach
 - `verb` solo sale si es un nombre de programa limpio (sin comillas, variables ni subshell, y no un script
   propio como `deploy-cliente.sh`).
 
-## 5. Tareas
+## 5. Tareas y git
 
-Una sesión puede asociarse a una tarea (historia de usuario, ticket) para medir su costo:
-`/nod tarea <id> [título]` o la variable `NOD_TASK`. Todos los eventos posteriores llevan `task`. Los commits
-podrán llevar los trailers `Claude-Session: <session>` y `Task: <id>`, que unen el proceso (Nod) con el
-resultado (chrono).
+Una sesión puede asociarse a una tarea (historia de usuario, ticket) para medir su costo, por orden de
+preferencia: `/nod tarea <id> [título]`, la variable `NOD_TASK`, o la rama de git si su nombre lleva un id de
+ticket (`feature/ABC-123-login` → `ABC-123`, patrón `[A-Z][A-Z0-9]+-[0-9]+`). Todos los eventos posteriores
+llevan `task`.
+
+**Proceso y resultado.** Nod mide el proceso (cómo se trabajó); el resultado (qué se entregó, si aguantó) sale
+del historial de git, por ejemplo con chrono. Los une `vcs.commit`: cada commit que crea una sesión queda con
+su `sha`, su sesión y su tarea. Claude Code ya añade a sus commits el trailer `Claude-Session`; con `vcs.commit`
+no hace falta tocar el mensaje del commit para saber de qué sesión y tarea salió.
 
 ## 6. Versionado
 
