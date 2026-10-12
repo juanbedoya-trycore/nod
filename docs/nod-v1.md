@@ -105,6 +105,7 @@ Tiempos en `*_ms`; tokens en `usage` = `{ "input", "output", "cache_read", "cach
 - **Respuesta exacta.** El agente no avisa cuando el humano aprueba: Nod lo calcula como el fin de la tool menos
   su ejecución (en Claude, la duración del hook clásico `PostToolUse`). Si el agente no la da, `wait_ms` es una
   cota superior y `exact: false`. Las negativas siempre son exactas.
+- **Negado.** «Negado por el humano» = `deny` con `by` `user` o `remote`; un `deny` con `by: "policy"` es un bloqueo por regla, no una decisión humana.
 - Un permiso preguntado que sigue sin respuesta al cerrar su turno (Esc en el diálogo) cuenta como `deny` por
   `user`.
 - **Tiempo bloqueado esperando al humano** = Σ `wait_ms` con `by: "user"` (y `remote`). El tiempo de un mod que
@@ -137,7 +138,13 @@ llevan `task`.
 
 **Proceso y resultado.** Nod mide el proceso (cómo se trabajó); el resultado (qué se entregó, si aguantó) sale
 del historial de git, por ejemplo con chrono. Los une `vcs.commit`: cada commit que crea una sesión queda con
-su `sha`, su sesión y su tarea. Claude Code ya añade a sus commits el trailer `Claude-Session`; con `vcs.commit`
+su `sha`, su sesión y su tarea. El `sha` es el que imprime git (normalmente abreviado a 7 caracteres): un
+consumidor lo resuelve por prefijo contra el repo. Tras un squash o un rebase el sha original deja de existir
+en la rama final; Nod no ve esa reescritura.
+
+`session.start` no lleva `task` aunque la tarea salga de la rama: el `task.set` (`source: "branch"`) va justo
+después y todos los eventos siguientes la llevan. Con privacidad `redactado`, la rama y la tarea van como hash y
+no se pueden cruzar con git. Claude Code ya añade a sus commits el trailer `Claude-Session`; con `vcs.commit`
 no hace falta tocar el mensaje del commit para saber de qué sesión y tarea salió.
 
 ## 6. Versionado
