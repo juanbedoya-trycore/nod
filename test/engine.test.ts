@@ -203,3 +203,21 @@ describe("robustez y privacidad del motor", () => {
     await closing;
   });
 });
+
+describe("tarea desde la rama", () => {
+  it("sin NOD_TASK, la rama con ticket fija la tarea; NOD_TASK manda", async () => {
+    const f = fake();
+    const nod = new NodEngine();
+    await nod.sessionStart(f.p, "s", { repo: { name: "nod", branch: "feature/ABC-9-login" } });
+    await nod.sessionEnd(f.p, "s", "exit");
+    await settle();
+    const set = f.envelopes().flatMap((e) => e.events).find((e) => e.type === "task.set")!;
+    expect(set.data).toEqual({ task: "ABC-9", source: "branch" });
+    const g = fake({ HOME: "/h", NOD_TASK: "XY-1" });
+    const other = new NodEngine();
+    await other.sessionStart(g.p, "s", { repo: { branch: "feature/ABC-9" } });
+    await other.sessionEnd(g.p, "s", "exit");
+    await settle();
+    expect(g.envelopes().flatMap((e) => e.events).find((e) => e.type === "task.set")!.data).toEqual({ task: "XY-1", source: "env" });
+  });
+});

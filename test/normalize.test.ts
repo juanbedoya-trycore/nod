@@ -162,3 +162,37 @@ describe("fidelidad", () => {
     expect(n.turnEnd(10, S, { turn: "sub", agent: "a1", outcome: "aborted" }).map((e) => [e.type, e.data.decision])).toEqual([["permission.decision", "deny"], ["turn.end", undefined]]);
   });
 });
+
+describe("git (fase 2)", () => {
+  it("taskFromBranch y branchFromHead", async () => {
+    const { taskFromBranch, branchFromHead } = await import("../src/core/normalize.js");
+    expect(taskFromBranch("feature/ABC-123-login")).toBe("ABC-123");
+    expect(taskFromBranch("ABC-7")).toBe("ABC-7");
+    expect(taskFromBranch("main")).toBeUndefined();
+    expect(taskFromBranch("fix/utf-8-bug")).toBeUndefined();
+    expect(branchFromHead("ref: refs/heads/feature/ABC-1\n")).toBe("feature/ABC-1");
+    expect(branchFromHead("3f2a1b...")).toBeUndefined();
+  });
+
+  it("commitOf: solo un git commit con su salida", async () => {
+    const { commitOf } = await import("../src/core/normalize.js");
+    const out = "[main 4c3f393] Reloj: cada demo empieza en el inicio\n 3 files changed, 10 insertions(+)";
+    expect(commitOf({ command: 'git commit -m "x"' }, out)).toEqual({ sha: "4c3f393", branch: "main", files: 3 });
+    expect(commitOf({ command: "git -C repo commit -qam x && git push" }, "[feature/A-1 (root-commit) abcdef1] x\n 1 file changed")).toEqual({ sha: "abcdef1", branch: "feature/A-1", files: 1 });
+    expect(commitOf({ command: "cat log.txt" }, out)).toBeUndefined();
+    expect(commitOf({ command: "git commit -m x" }, "nothing to commit, working tree clean")).toBeUndefined();
+  });
+
+  it("un git commit exitoso emite vcs.commit con su tarea y su repo", () => {
+    const n = new Normalizer();
+    n.sessionStart(0, S, { repo: { name: "nod", branch: "feature/ABC-1" } });
+    n.setTask(1, S, "ABC-1", undefined, "branch");
+    n.toolCall(2, S, { toolUseId: "t", tool: "Bash", input: { command: "git commit -m listo" } });
+    const out = n.toolResult(3, S, { toolUseId: "t", tool: "Bash", ok: true, rejected: false, outputChars: 40, output: "[feature/ABC-1 1a2b3c4] listo\n 2 files changed" });
+    expect(out.map((e) => e.type)).toEqual(["tool.result", "vcs.commit"]);
+    expect(out[1]!).toMatchObject({ task: "ABC-1", data: { sha: "1a2b3c4", branch: "feature/ABC-1", files: 2, repo: "nod", tool_use_id: "t" } });
+    // Un commit fallido no cuenta.
+    n.toolCall(4, S, { toolUseId: "u", tool: "Bash", input: { command: "git commit -m x" } });
+    expect(n.toolResult(5, S, { toolUseId: "u", tool: "Bash", ok: false, rejected: false, outputChars: 0, output: "[main 1234567] x" }).map((e) => e.type)).toEqual(["tool.result"]);
+  });
+});

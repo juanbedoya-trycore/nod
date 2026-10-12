@@ -8,7 +8,7 @@ import type { ChannelContext, CheckInfo } from "./control/channel.js";
 import type { AbortLike } from "./control/hold.js";
 import { PRIVACY_LEVELS } from "./events.js";
 import type { Draft, NodEvent, Privacy, Source, Usage } from "./events.js";
-import { Normalizer } from "./normalize.js";
+import { Normalizer, taskFromBranch } from "./normalize.js";
 import type { CheckDecision, PromptEdit, SessionInfo, StepInfo, ToolCallInfo, ToolResultInfo, TurnEndInfo, UsageSnapshot } from "./normalize.js";
 import { Outbox } from "./outbox.js";
 import type { Transport } from "./outbox.js";
@@ -87,7 +87,12 @@ export class NodEngine {
       this.started.add(session);
       this.stats = freshStats();
       const out = this.norm.sessionStart(now, session, info);
-      if (rt.config.task !== undefined && this.norm.task === undefined) out.push(...this.norm.setTask(now, session, rt.config.task, undefined, "env"));
+      if (this.norm.task === undefined) {
+        // Tarea: NOD_TASK; si no, el id de ticket que lleve el nombre de la rama (docs/nod-v1.md §5).
+        const fromBranch = taskFromBranch(info.repo?.branch);
+        if (rt.config.task !== undefined) out.push(...this.norm.setTask(now, session, rt.config.task, undefined, "env"));
+        else if (fromBranch !== undefined) out.push(...this.norm.setTask(now, session, fromBranch, undefined, "branch"));
+      }
       this.channel.sessionStarted(p, this.ctx(rt), session);
       return out;
     });

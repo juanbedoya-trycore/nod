@@ -113,6 +113,9 @@ function applyPrivacy(d, p) {
     if (d.type === "command" && typeof data.name === "string" && !BUILTIN_COMMANDS.has(data.name)) data.name = hidden(data.name);
     if (d.type === "agent.spawn" && typeof data.type === "string" && !BUILTIN_AGENTS.has(data.type)) data.type = hidden(data.type);
     if (typeof data.tool === "string") data.tool = hideMcpServer(data.tool);
+    if (d.type === "vcs.commit" && typeof data.branch === "string") data.branch = hidden(data.branch);
+    const repoAfter = data.repo;
+    if (repoAfter !== void 0 && typeof repoAfter.branch === "string") data.repo = { ...repoAfter, branch: hidden(repoAfter.branch) };
     if (Array.isArray(data.tools)) data.tools = data.tools.map((t) => typeof t === "string" ? hideMcpServer(t) : t);
   }
   return out;
@@ -5403,10 +5406,31 @@ function verbOf(command) {
   }
   return void 0;
 }
+function taskFromBranch(branch) {
+  const m = branch ? /(?:^|[^A-Za-z0-9])([A-Z][A-Z0-9]+-[0-9]+)(?![0-9])/.exec(branch) : null;
+  return m?.[1];
+}
+function branchFromHead(head) {
+  const m = head ? /^ref: refs\/heads\/(.+)$/m.exec(head.trim()) : null;
+  return m?.[1];
+}
+function commitOf(input, output) {
+  const command = input?.command;
+  if (typeof command !== "string" || !/(^|[;&|(\s])git(\s+-[cC]\s+\S+)*\s+commit(\s|$)/.test(command) || output === void 0) return void 0;
+  const m = /^\[([^\s\]]+)(?: \(root-commit\))? ([0-9a-f]{7,40})\]/m.exec(output);
+  if (m === null) return void 0;
+  const out = { sha: m[2] };
+  if (m[1] !== "detached") out.branch = m[1];
+  const f = /(\d+) files? changed/.exec(output);
+  if (f !== null) out.files = Number(f[1]);
+  return out;
+}
 var Normalizer = class {
   /** Tarea en curso (§5): va en todos los eventos. */
   task;
   sessionStartTs;
+  /** Nombre del repo de la sesión (va en vcs.commit). */
+  repoName;
   tools = /* @__PURE__ */ new Map();
   agents = /* @__PURE__ */ new Map();
   turnSteps = /* @__PURE__ */ new Map();
@@ -5433,6 +5457,7 @@ var Normalizer = class {
   sessionStart(ts, session, info2) {
     this.resetSession();
     this.sessionStartTs = ts;
+    this.repoName = info2.repo?.name ?? void 0;
     const data = { interactive: info2.interactive === true };
     if (info2.cwd !== void 0) data.cwd = info2.cwd;
     if (info2.repo !== void 0) {
@@ -5440,6 +5465,7 @@ var Normalizer = class {
       if (info2.repo.root) repo.root = info2.repo.root;
       if (info2.repo.remote) repo.remote = info2.repo.remote;
       if (info2.repo.name) repo.name = info2.repo.name;
+      if (info2.repo.branch) repo.branch = info2.repo.branch;
       if (Object.keys(repo).length > 0) data.repo = repo;
     }
     if (info2.model !== void 0) data.model = info2.model;
@@ -5528,7 +5554,7 @@ var Normalizer = class {
   }
   toolCall(ts, session, c) {
     const turn = this.current.get(c.agent ?? "");
-    this.tools.set(c.toolUseId, { tool: c.tool, agent: c.agent, turn, callTs: ts });
+    this.tools.set(c.toolUseId, { tool: c.tool, input: c.input, agent: c.agent, turn, callTs: ts });
     const data = { tool_use_id: c.toolUseId, tool: c.tool };
     const input = c.input;
     const verb = verbOf(input?.command);
@@ -5591,6 +5617,14 @@ var Normalizer = class {
       rejected: r.rejected,
       output_chars: r.outputChars
     }, { turn: p.turn, agent: p.agent }));
+    const commit = r.ok && !r.rejected ? commitOf(p.input, r.output) : void 0;
+    if (commit !== void 0) {
+      const data = { sha: commit.sha, tool_use_id: r.toolUseId };
+      if (commit.branch !== void 0) data.branch = commit.branch;
+      if (commit.files !== void 0) data.files = commit.files;
+      if (this.repoName !== void 0) data.repo = this.repoName;
+      out.push(this.draft(ts, "vcs.commit", session, data, { turn: p.turn, agent: p.agent }));
+    }
     this.tools.delete(r.toolUseId);
     return out;
   }
@@ -6384,7 +6418,11 @@ var NodEngine = class {
       this.started.add(session);
       this.stats = freshStats();
       const out = this.norm.sessionStart(now, session, info2);
-      if (rt.config.task !== void 0 && this.norm.task === void 0) out.push(...this.norm.setTask(now, session, rt.config.task, void 0, "env"));
+      if (this.norm.task === void 0) {
+        const fromBranch = taskFromBranch(info2.repo?.branch);
+        if (rt.config.task !== void 0) out.push(...this.norm.setTask(now, session, rt.config.task, void 0, "env"));
+        else if (fromBranch !== void 0) out.push(...this.norm.setTask(now, session, fromBranch, void 0, "branch"));
+      }
       this.channel.sessionStarted(p, this.ctx(rt), session);
       return out;
     });
@@ -6948,12 +6986,25 @@ async function currentSession($) {
   return sessionId;
 }
 var opt = (v) => typeof v === "string" && v !== "" ? v : void 0;
+async function branchOf($, root) {
+  if (typeof root !== "string" || root === "") return void 0;
+  try {
+    let gitDir = `${root}/.git`;
+    const dotGit = await Promise.resolve().then(() => $.fs.read(gitDir)).catch(() => void 0);
+    const pointer = typeof dotGit === "string" ? /^gitdir: (.+)$/m.exec(dotGit.trim()) : null;
+    if (pointer !== null) gitDir = pointer[1].startsWith("/") ? pointer[1] : `${root}/${pointer[1]}`;
+    return branchFromHead(String(await $.fs.read(`${gitDir}/HEAD`)));
+  } catch {
+    return void 0;
+  }
+}
 async function sessionInfo($, e) {
   const repo = await Promise.resolve().then(() => $.session.repo()).catch(() => void 0);
   const model = await Promise.resolve().then(() => $.session.model()).catch(() => void 0);
+  const branch = repo && typeof repo === "object" ? await branchOf($, repo.root) : void 0;
   return {
     cwd: opt(e?.cwd),
-    repo: repo && typeof repo === "object" ? { root: repo.root ?? null, remote: repo.remote ?? null, name: repo.name ?? null } : void 0,
+    repo: repo && typeof repo === "object" ? { root: repo.root ?? null, remote: repo.remote ?? null, name: repo.name ?? null, branch: branch ?? null } : void 0,
     model: opt(model),
     interactive: e?.isInteractive === true,
     surface: opt(e?.surface)
@@ -7050,7 +7101,7 @@ function register(on, _options) {
     if (id !== void 0) {
       const text = typeof out?.text === "string" ? out.text : typeof out?.result === "string" ? out.result : "";
       const rejected = out?.isError === true && REJECTED_RE.test(typeof out?.result === "string" ? out.result : text);
-      void nod.toolResult(platform($), session, { toolUseId: id, tool, ok: out?.isError !== true, rejected, outputChars: text.length });
+      void nod.toolResult(platform($), session, { toolUseId: id, tool, ok: out?.isError !== true, rejected, outputChars: text.length, output: tool === "Bash" ? text.slice(0, 2e3) : void 0 });
     }
     const note = nod.takeNote(opt(e?.agentId));
     return note === void 0 ? out : withContext(out, note);

@@ -119,7 +119,7 @@ Tiempos en `*_ms`; tokens en `usage` = `{ "input", "output", "cache_read", "cach
 | Perfil | Qué sale | Destinos |
 | --- | --- | --- |
 | `completo` | todo, también `text`, `answer`, `input`, rutas y `machine` | cualquiera |
-| `redactado` | sin `text`, `answer`, `input`, `description`, `title`, `cwd`, `repo.root`, `repo.remote`, el `reason` del permiso ni `machine`. Los identificadores que escribe el usuario (tarea, comandos propios, tipos de subagente propios, servidores MCP) van como hash `h-xxxxxxxx`: se puede agrupar, no leer. Quedan tipos, tiempos, tokens, nombres de tool, `verb`, `repo.name` y longitudes | cualquiera |
+| `redactado` | sin `text`, `answer`, `input`, `description`, `title`, `cwd`, `repo.root`, `repo.remote`, el `reason` del permiso ni `machine`. Los identificadores que escribe el usuario (tarea, rama, comandos propios, tipos de subagente propios, servidores MCP) van como hash `h-xxxxxxxx`: se puede agrupar, no leer. Quedan tipos, tiempos, tokens, nombres de tool, `verb`, `repo.name` y longitudes | cualquiera |
 | `trabajo` | como `redactado`, pero con los identificadores legibles (no salen de la máquina) | solo locales: ficheros y URLs de `localhost`, `127.0.0.1` o `::1` |
 
 - El perfil se aplica **antes** de encolar. Si se endurece (por `/nod privacidad` o al arrancar con otro

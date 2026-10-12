@@ -10,6 +10,7 @@ import type { NodEnv } from "../../core/config.js";
 import type { HostInfo, Platform } from "../../core/platform.js";
 import type { SessionInfo, UsageSnapshot } from "../../core/normalize.js";
 import { usageOf } from "../../core/events.js";
+import { branchFromHead } from "../../core/normalize.js";
 import { withContext } from "../../core/control/messages.js";
 import { MODE_CACHE_MS, lastMode, modeGrepArgs, transcriptPath } from "./mode.js";
 
@@ -190,12 +191,27 @@ async function currentSession($: Engine): Promise<string> {
 
 const opt = (v: unknown): string | undefined => (typeof v === "string" && v !== "" ? v : undefined);
 
+/** Rama actual del repo leyendo `.git/HEAD` (en un worktree, `.git` es un fichero que apunta al suyo). */
+async function branchOf($: Engine, root: unknown): Promise<string | undefined> {
+  if (typeof root !== "string" || root === "") return undefined;
+  try {
+    let gitDir = `${root}/.git`;
+    const dotGit = await Promise.resolve().then(() => $.fs.read(gitDir)).catch(() => undefined);
+    const pointer = typeof dotGit === "string" ? /^gitdir: (.+)$/m.exec(dotGit.trim()) : null;
+    if (pointer !== null) gitDir = pointer[1]!.startsWith("/") ? pointer[1]! : `${root}/${pointer[1]}`;
+    return branchFromHead(String(await $.fs.read(`${gitDir}/HEAD`)));
+  } catch {
+    return undefined;
+  }
+}
+
 async function sessionInfo($: Engine, e: any): Promise<SessionInfo> {
   const repo = await Promise.resolve().then(() => $.session.repo()).catch(() => undefined);
   const model = await Promise.resolve().then(() => $.session.model()).catch(() => undefined);
+  const branch = repo && typeof repo === "object" ? await branchOf($, repo.root) : undefined;
   return {
     cwd: opt(e?.cwd),
-    repo: repo && typeof repo === "object" ? { root: repo.root ?? null, remote: repo.remote ?? null, name: repo.name ?? null } : undefined,
+    repo: repo && typeof repo === "object" ? { root: repo.root ?? null, remote: repo.remote ?? null, name: repo.name ?? null, branch: branch ?? null } : undefined,
     model: opt(model),
     interactive: e?.isInteractive === true,
     surface: opt(e?.surface),
@@ -310,7 +326,7 @@ export function register(on: On, _options?: unknown): void {
     if (id !== undefined) {
       const text = typeof out?.text === "string" ? out.text : typeof out?.result === "string" ? out.result : "";
       const rejected = out?.isError === true && REJECTED_RE.test(typeof out?.result === "string" ? out.result : text);
-      void nod.toolResult(platform($), session, { toolUseId: id, tool, ok: out?.isError !== true, rejected, outputChars: text.length });
+      void nod.toolResult(platform($), session, { toolUseId: id, tool, ok: out?.isError !== true, rejected, outputChars: text.length, output: tool === "Bash" ? text.slice(0, 2000) : undefined });
     }
     // Un mensaje de un aprobador llegado a mitad de turno: el modelo lo lee con este resultado, sin esperar.
     const note = nod.takeNote(opt(e?.agentId));

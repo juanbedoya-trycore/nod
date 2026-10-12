@@ -7,7 +7,7 @@ import type { Draft, EventType, Usage } from "./events.js";
 
 export interface SessionInfo {
   cwd?: string | undefined;
-  repo?: { root?: string | null; remote?: string | null; name?: string | null } | undefined;
+  repo?: { root?: string | null; remote?: string | null; name?: string | null; branch?: string | null } | undefined;
   model?: string | undefined;
   interactive?: boolean | undefined;
   surface?: string | undefined;
@@ -57,6 +57,8 @@ export interface ToolResultInfo {
   /** El humano negó el permiso (el agente lo devuelve como resultado de la tool). */
   rejected: boolean;
   outputChars: number;
+  /** Comienzo de la salida (no se emite): sirve para reconocer el commit que creó un `git commit`. */
+  output?: string | undefined;
 }
 
 export interface UsageSnapshot {
@@ -67,6 +69,8 @@ export interface UsageSnapshot {
 
 interface PendingTool {
   tool: string;
+  /** Entrada de la tool (para reconocer un `git commit`). */
+  input?: unknown;
   agent: string | undefined;
   turn: string | undefined;
   callTs: number;
@@ -109,10 +113,40 @@ export function verbOf(command: unknown): string | undefined {
   return undefined;
 }
 
+/** Id de ticket en un nombre de rama (`feature/ABC-123-login` → `ABC-123`). */
+export function taskFromBranch(branch: string | undefined | null): string | undefined {
+  const m = branch ? /(?:^|[^A-Za-z0-9])([A-Z][A-Z0-9]+-[0-9]+)(?![0-9])/.exec(branch) : null;
+  return m?.[1];
+}
+
+/** Rama a partir del contenido de `.git/HEAD` (`ref: refs/heads/x`); undefined si HEAD está suelto. */
+export function branchFromHead(head: string | undefined): string | undefined {
+  const m = head ? /^ref: refs\/heads\/(.+)$/m.exec(head.trim()) : null;
+  return m?.[1];
+}
+
+/**
+ * El commit que creó un `git commit` lanzado por Bash, a partir de su salida (`[rama abc1234] mensaje` y
+ * `N files changed`). Solo si el comando es un git commit: otro comando que imprima algo parecido no cuenta.
+ */
+export function commitOf(input: unknown, output: string | undefined): { sha: string; branch?: string; files?: number } | undefined {
+  const command = (input as { command?: unknown } | undefined)?.command;
+  if (typeof command !== "string" || !/(^|[;&|(\s])git(\s+-[cC]\s+\S+)*\s+commit(\s|$)/.test(command) || output === undefined) return undefined;
+  const m = /^\[([^\s\]]+)(?: \(root-commit\))? ([0-9a-f]{7,40})\]/m.exec(output);
+  if (m === null) return undefined;
+  const out: { sha: string; branch?: string; files?: number } = { sha: m[2]! };
+  if (m[1] !== "detached") out.branch = m[1]!;
+  const f = /(\d+) files? changed/.exec(output);
+  if (f !== null) out.files = Number(f[1]);
+  return out;
+}
+
 export class Normalizer {
   /** Tarea en curso (§5): va en todos los eventos. */
   task: string | undefined;
   private sessionStartTs: number | undefined;
+  /** Nombre del repo de la sesión (va en vcs.commit). */
+  private repoName: string | undefined;
   private readonly tools = new Map<string, PendingTool>();
   private readonly agents = new Map<string, AgentRun>();
   private readonly turnSteps = new Map<string, number>();
@@ -142,6 +176,7 @@ export class Normalizer {
   sessionStart(ts: number, session: string, info: SessionInfo): Draft[] {
     this.resetSession();
     this.sessionStartTs = ts;
+    this.repoName = info.repo?.name ?? undefined;
     const data: Record<string, unknown> = { interactive: info.interactive === true };
     if (info.cwd !== undefined) data.cwd = info.cwd;
     if (info.repo !== undefined) {
@@ -149,6 +184,7 @@ export class Normalizer {
       if (info.repo.root) repo.root = info.repo.root;
       if (info.repo.remote) repo.remote = info.repo.remote;
       if (info.repo.name) repo.name = info.repo.name;
+      if (info.repo.branch) repo.branch = info.repo.branch;
       if (Object.keys(repo).length > 0) data.repo = repo;
     }
     if (info.model !== undefined) data.model = info.model;
@@ -250,7 +286,7 @@ export class Normalizer {
 
   toolCall(ts: number, session: string, c: ToolCallInfo): Draft[] {
     const turn = this.current.get(c.agent ?? "");
-    this.tools.set(c.toolUseId, { tool: c.tool, agent: c.agent, turn, callTs: ts });
+    this.tools.set(c.toolUseId, { tool: c.tool, input: c.input, agent: c.agent, turn, callTs: ts });
     const data: Record<string, unknown> = { tool_use_id: c.toolUseId, tool: c.tool };
     const input = c.input as Record<string, unknown> | undefined;
     const verb = verbOf(input?.command);
@@ -320,6 +356,14 @@ export class Normalizer {
       rejected: r.rejected,
       output_chars: r.outputChars,
     }, { turn: p.turn, agent: p.agent }));
+    const commit = r.ok && !r.rejected ? commitOf(p.input, r.output) : undefined;
+    if (commit !== undefined) {
+      const data: Record<string, unknown> = { sha: commit.sha, tool_use_id: r.toolUseId };
+      if (commit.branch !== undefined) data.branch = commit.branch;
+      if (commit.files !== undefined) data.files = commit.files;
+      if (this.repoName !== undefined) data.repo = this.repoName;
+      out.push(this.draft(ts, "vcs.commit", session, data, { turn: p.turn, agent: p.agent }));
+    }
     this.tools.delete(r.toolUseId);
     return out;
   }

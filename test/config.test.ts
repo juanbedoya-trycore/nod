@@ -195,3 +195,13 @@ describe("control", () => {
     expect(controlBlocked(config.control, "completo")).toBe("no se pudo leer el token (/no/existe)");
   });
 });
+
+describe("redactado: rama con hash, sha intacto", () => {
+  it("vcs.commit y session.start", () => {
+    const c = applyPrivacy({ ts: 0, type: "vcs.commit", session: "s", data: { sha: "1a2b3c4", branch: "cliente/ACME-1" } }, "redactado");
+    expect(c.data.sha).toBe("1a2b3c4");
+    expect(c.data.branch).toMatch(/^h-[0-9a-f]{8}$/);
+    const st = applyPrivacy({ ts: 0, type: "session.start", session: "s", data: { repo: { name: "r", branch: "cliente/ACME-1", root: "/x" }, interactive: true } }, "redactado");
+    expect(st.data.repo).toEqual({ name: "r", branch: expect.stringMatching(/^h-/) });
+  });
+});

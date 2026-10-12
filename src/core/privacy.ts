@@ -71,6 +71,10 @@ export function applyPrivacy<T extends Draft>(d: T, p: Privacy): T {
     if (d.type === "command" && typeof data.name === "string" && !BUILTIN_COMMANDS.has(data.name)) data.name = hidden(data.name);
     if (d.type === "agent.spawn" && typeof data.type === "string" && !BUILTIN_AGENTS.has(data.type)) data.type = hidden(data.type);
     if (typeof data.tool === "string") data.tool = hideMcpServer(data.tool);
+    // La rama suele llevar el ticket o el cliente; el sha no identifica a nadie y hace falta para cruzar con git.
+    if (d.type === "vcs.commit" && typeof data.branch === "string") data.branch = hidden(data.branch);
+    const repoAfter = data.repo as Record<string, unknown> | undefined;
+    if (repoAfter !== undefined && typeof repoAfter.branch === "string") data.repo = { ...repoAfter, branch: hidden(repoAfter.branch) };
     if (Array.isArray(data.tools)) data.tools = data.tools.map((t) => (typeof t === "string" ? hideMcpServer(t) : t));
   }
   return out;

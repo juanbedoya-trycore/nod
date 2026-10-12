@@ -39,7 +39,8 @@ export type EventType =
   | "agent.end"
   | "usage"
   | "command"
-  | "task.set";
+  | "task.set"
+  | "vcs.commit";
 
 /** Un evento antes de numerar: lo que produce el normalizador. */
 export interface Draft {
