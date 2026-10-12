@@ -1,0 +1,23 @@
+{
+  "name": "frame-delta-ids-limite",
+  "kind": "frame",
+  "spec": "§2, §10",
+  "expect": "accept",
+  "schema": "frame",
+  "note": "Límites: epoch 2^32-1, seq 2^53-1 y id 2^32-1. Cada entero ocupa 5 u 9 bytes CBOR.",
+  "data": [
+    "d",
+    4294967295,
+    9007199254740991,
+    1791683941,
+    [
+      [
+        "add",
+        4294967295,
+        "task",
+        4294967294,
+        "Bash"
+      ]
+    ]
+  ]
+}

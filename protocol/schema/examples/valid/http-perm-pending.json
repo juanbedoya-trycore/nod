@@ -1,0 +1,15 @@
+{
+  "schema": "http",
+  "data": {
+    "orbit": "0.2.0",
+    "instance_id": "mac-personal",
+    "session_id": "617d2751-451e-4785-8fb3-a9486bad9b19",
+    "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+    "nonce": "ABEiM0RVZneImaq7zN3u_w",
+    "exp": 1791684030,
+    "tool": "Bash",
+    "sum": "touch target-allow.txt",
+    "wok": true
+  },
+  "def": "permPending"
+}

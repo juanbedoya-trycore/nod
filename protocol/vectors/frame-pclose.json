@@ -1,0 +1,16 @@
+{
+  "name": "frame-pclose",
+  "kind": "frame",
+  "spec": "§6.2, §6.5",
+  "expect": "accept",
+  "schema": "frame",
+  "note": "El terminal ganó la carrera con allow.",
+  "data": [
+    "pclose",
+    {
+      "$hex": "00112233445566778899aabbccddeeff"
+    },
+    "terminal",
+    "allow"
+  ]
+}

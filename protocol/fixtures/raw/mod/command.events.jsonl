@@ -1,0 +1,3 @@
+{"ts":1791683948331,"event":"session.start","data":{"cwd":"/private/tmp/claude-501/-Users-dev-Documents-GitHub-Orbit/e07ed6ca-5dd9-424a-aa72-4cc0147e6139/scratchpad/orbit-s1-ZJNzIj/command","surface":null,"isInteractive":false}}
+{"ts":1791683948396,"event":"command.run","data":{"command":"orbit"}}
+{"ts":1791683948495,"event":"session.end","data":{"reason":"other","sessionId":"ed877d8e-891d-4ad7-9b3b-c021ae8cbe74","resume":{"id":"ed877d8e-891d-4ad7-9b3b-c021ae8cbe74"}}}

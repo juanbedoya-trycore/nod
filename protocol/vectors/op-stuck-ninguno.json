@@ -1,0 +1,16 @@
+{
+  "name": "op-stuck-ninguno",
+  "kind": "op",
+  "spec": "§4.5 (0.2.3)",
+  "expect": "accept",
+  "schema": "frame#/$defs/opStuck",
+  "note": "La sesión 7 ya no está atascada: since 0, k vacía, n 0.",
+  "data": [
+    "stuck",
+    7,
+    "none",
+    0,
+    "",
+    0
+  ]
+}

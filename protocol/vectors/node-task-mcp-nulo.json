@@ -1,0 +1,17 @@
+{
+  "name": "node-task-mcp-nulo",
+  "kind": "node",
+  "spec": "§4.1, §10",
+  "expect": "accept",
+  "schema": "frame#/$defs/node",
+  "note": "Tarea sin MCP: m=0 explícito.",
+  "data": [
+    41,
+    "task",
+    7,
+    "done",
+    "Bash",
+    0,
+    1791683945
+  ]
+}

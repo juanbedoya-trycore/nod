@@ -1,0 +1,31 @@
+{
+  "name": "op-snap",
+  "kind": "op",
+  "spec": "§5.2",
+  "expect": "accept",
+  "schema": "frame#/$defs/opSnap",
+  "note": "Snap con un nodo session y un task con mcp.",
+  "data": [
+    "snap",
+    [
+      [
+        7,
+        "session",
+        0,
+        "run",
+        "Orbit",
+        0,
+        1791683936
+      ],
+      [
+        42,
+        "task",
+        7,
+        "perm",
+        "echo",
+        9,
+        1791683944
+      ]
+    ]
+  ]
+}

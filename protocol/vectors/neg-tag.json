@@ -1,0 +1,8 @@
+{
+  "name": "neg-tag",
+  "kind": "negative",
+  "spec": "§7",
+  "expect": "reject",
+  "check": "forbidden-type",
+  "note": "Tag 1 (0xc1). En 0.2.0 no se usan tags. Canónico; la regla es estructural."
+}

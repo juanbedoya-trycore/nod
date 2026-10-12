@@ -1,0 +1,15 @@
+{
+  "name": "label-cortada-emoji",
+  "kind": "op",
+  "spec": "§2, §10",
+  "expect": "accept",
+  "schema": "frame#/$defs/opAdd",
+  "note": "Entrada de 35 bytes (31 'a', un emoji de 4 bytes, 'bbb'). Resultado: 31 'a' (el emoji no cabe en 32).",
+  "data": [
+    "add",
+    60,
+    "task",
+    7,
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ]
+}

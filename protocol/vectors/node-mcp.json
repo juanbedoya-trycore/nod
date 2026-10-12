@@ -1,0 +1,17 @@
+{
+  "name": "node-mcp",
+  "kind": "node",
+  "spec": "§4.2",
+  "expect": "accept",
+  "schema": "frame#/$defs/node",
+  "note": "Nodo mcp de servidor \"echo\" bajo la sesión 7.",
+  "data": [
+    9,
+    "mcp",
+    7,
+    "run",
+    "echo",
+    0,
+    1791683940
+  ]
+}

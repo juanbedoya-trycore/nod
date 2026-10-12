@@ -1,0 +1,14 @@
+{
+  "schema": "http",
+  "data": {
+    "orbit": "0.2.0",
+    "instance_id": "mac",
+    "session_id": "s",
+    "tool_use_id": "t",
+    "exp": 1,
+    "tool": "Bash",
+    "sum": "x",
+    "wok": true
+  },
+  "def": "permPending"
+}

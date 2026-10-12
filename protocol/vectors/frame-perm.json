@@ -1,0 +1,21 @@
+{
+  "name": "frame-perm",
+  "kind": "frame",
+  "spec": "§6.2",
+  "expect": "accept",
+  "schema": "frame",
+  "note": "Solicitud de permiso con nonce de 16 bytes, wok=true e instance_id (9.º elemento, 0.2). Los tiempos son segundos Unix. Su ph está en perm-hash-entrada.",
+  "data": [
+    "perm",
+    {
+      "$hex": "00112233445566778899aabbccddeeff"
+    },
+    "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+    41,
+    1791684030,
+    "Bash",
+    "touch target-allow.txt",
+    true,
+    "mac-personal"
+  ]
+}

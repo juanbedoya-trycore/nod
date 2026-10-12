@@ -1,0 +1,15 @@
+{
+  "name": "op-meta",
+  "kind": "op",
+  "spec": "§5.2, §5.4",
+  "expect": "accept",
+  "schema": "frame#/$defs/opMeta",
+  "note": "Totales acumulados de la sesión corta 7.",
+  "data": [
+    "meta",
+    7,
+    43292,
+    286,
+    2
+  ]
+}

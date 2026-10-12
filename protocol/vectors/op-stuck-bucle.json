@@ -1,0 +1,16 @@
+{
+  "name": "op-stuck-bucle",
+  "kind": "op",
+  "spec": "§4.5 (0.2.3)",
+  "expect": "accept",
+  "schema": "frame#/$defs/opStuck",
+  "note": "La sesión 7 repite Bash con la misma entrada: 6 veces seguidas desde 1791683940.",
+  "data": [
+    "stuck",
+    7,
+    "loop",
+    1791683940,
+    "Bash",
+    6
+  ]
+}

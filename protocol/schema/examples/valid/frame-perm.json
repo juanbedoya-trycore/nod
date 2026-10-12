@@ -1,0 +1,16 @@
+{
+  "schema": "frame",
+  "data": [
+    "perm",
+    {
+      "$hex": "00112233445566778899aabbccddeeff"
+    },
+    "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+    41,
+    1791684030,
+    "Bash",
+    "touch target-allow.txt",
+    true,
+    "mac-personal"
+  ]
+}

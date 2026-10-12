@@ -1,0 +1,11 @@
+{
+  "schema": "http",
+  "data": {
+    "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+    "nonce": "ABEiM0RVZneImaq7zN3u_w",
+    "by": "error",
+    "decision": "none",
+    "reject": "ph"
+  },
+  "def": "permResolved"
+}

@@ -1,0 +1,12 @@
+{
+  "name": "op-snap-vacio",
+  "kind": "op",
+  "spec": "§5.2, §5.5",
+  "expect": "accept",
+  "schema": "frame#/$defs/opSnap",
+  "note": "Snap del grafo vacío.",
+  "data": [
+    "snap",
+    []
+  ]
+}

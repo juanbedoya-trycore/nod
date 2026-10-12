@@ -1,0 +1,7 @@
+{
+  "name": "orbit",
+  "version": "0.3.0",
+  "description": "Orbit: tus sesiones de Claude Code en el reloj. Envía sesiones, subagentes y tools al servidor Orbit y retiene los permisos hasta que respondas en el reloj; /orbit muestra el estado.",
+  "author": { "name": "Juan Bedoya" },
+  "license": "MIT"
+}

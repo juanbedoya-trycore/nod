@@ -1,0 +1,17 @@
+{
+  "name": "frame-text",
+  "kind": "frame",
+  "spec": "§8",
+  "expect": "accept",
+  "schema": "frame",
+  "note": "Respuesta de GET /v0/text con comando en unicode (UTF-8 multibyte). Sin truncar, sin redacción.",
+  "data": [
+    "text",
+    3,
+    41,
+    "cmd",
+    "echo 'Ñandú 日本語 🚀' && ls -la",
+    false,
+    false
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "schema": "frame",
+  "data": [
+    "perm",
+    {
+      "$hex": "00112233445566778899aabbccddeeff"
+    },
+    "toolu_x",
+    41,
+    1,
+    "Bash",
+    "x",
+    true,
+    "MAC Personal"
+  ]
+}

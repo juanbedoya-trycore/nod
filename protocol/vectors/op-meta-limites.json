@@ -1,0 +1,15 @@
+{
+  "name": "op-meta-limites",
+  "kind": "op",
+  "spec": "§2, §5.2",
+  "expect": "accept",
+  "schema": "frame#/$defs/opMeta",
+  "note": "Totales en el límite: in_tok 2^53-1 y turns 2^32-1.",
+  "data": [
+    "meta",
+    7,
+    9007199254740991,
+    4294967295,
+    4294967295
+  ]
+}

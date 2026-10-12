@@ -1,0 +1,7 @@
+{
+  "schema": "hook",
+  "data": {
+    "session_id": "s",
+    "hook_event_name": "SubagentStart"
+  }
+}

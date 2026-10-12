@@ -1,0 +1,47 @@
+{
+  "name": "frame-delta-lote",
+  "kind": "frame",
+  "spec": "§5.4",
+  "expect": "accept",
+  "schema": "frame",
+  "note": "Lote de 5 ops en una ventana: add, st, add con mcp, rm en cascada y meta.",
+  "data": [
+    "d",
+    3,
+    42,
+    1791683940,
+    [
+      [
+        "add",
+        41,
+        "task",
+        7,
+        "Bash"
+      ],
+      [
+        "st",
+        41,
+        "perm"
+      ],
+      [
+        "add",
+        42,
+        "task",
+        7,
+        "echo",
+        9
+      ],
+      [
+        "rm",
+        30
+      ],
+      [
+        "meta",
+        7,
+        43292,
+        286,
+        2
+      ]
+    ]
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "frame",
+  "data": [
+    "dec",
+    {
+      "$hex": "00112233445566778899aabbccddeeff"
+    },
+    "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+    "allow",
+    1791683990,
+    {
+      "$hex": "0102030405060708"
+    },
+    {
+      "$hex": "abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab"
+    },
+    {
+      "$hex": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    }
+  ]
+}

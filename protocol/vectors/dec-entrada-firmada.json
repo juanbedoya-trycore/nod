@@ -1,0 +1,21 @@
+{
+  "name": "dec-entrada-firmada",
+  "kind": "signing",
+  "spec": "§6.3, §7",
+  "expect": "accept",
+  "schema": null,
+  "note": "Entrada firmada (formato de firma 2): CBOR determinista de [\"orbit-dec\", 2, nonce, tool_use_id, decision, ts, ph], con el ph de perm-hash-entrada. La firma se hace sobre estos bytes.",
+  "data": [
+    "orbit-dec",
+    2,
+    {
+      "$hex": "00112233445566778899aabbccddeeff"
+    },
+    "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+    "allow",
+    1791683990,
+    {
+      "$hex": "8e23d347a9fd24035c1be18c18194551d4034ae622eaad0f64bf3da3fad1354c"
+    }
+  ]
+}

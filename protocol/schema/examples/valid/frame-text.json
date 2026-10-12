@@ -1,0 +1,12 @@
+{
+  "schema": "frame",
+  "data": [
+    "text",
+    3,
+    41,
+    "cmd",
+    "touch target-allow.txt",
+    false,
+    false
+  ]
+}

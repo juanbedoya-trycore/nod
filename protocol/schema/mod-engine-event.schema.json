@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orbit.invalid/protocol/0.2/mod-engine-event.schema.json",
+  "title": "Eventos del motor vistos por el mod (linea del log del spike S1)",
+  "description": "NO es un mensaje del protocolo: documenta la entrada que el mod traduce a hook-payload (SPEC 3.3). Cada linea de fixtures/raw/mod/*.events.jsonl es {ts, event, data}. session_id y agent dentro de data los anadio el mod del spike ($.session.id(), $.agent.list()); verdict de tool.check es el resultado de next(e); permission.* son eventos propios del spike.",
+  "type": "object",
+  "required": ["ts", "event", "data"],
+  "properties": {
+    "ts": { "type": "integer", "minimum": 0 },
+    "event": { "type": "string" },
+    "data": { "type": "object" }
+  },
+  "allOf": [
+    { "if": { "properties": { "event": { "const": "session.start" } } },
+      "then": { "properties": { "data": { "required": ["cwd", "isInteractive"] } } } },
+    { "if": { "properties": { "event": { "const": "turn.start" } } },
+      "then": { "properties": { "data": { "required": ["text", "turnId"] } } } },
+    { "if": { "properties": { "event": { "const": "tool.call" } } },
+      "then": { "properties": { "data": { "required": ["tool", "tool_use_id"] } } } },
+    { "if": { "properties": { "event": { "const": "tool.check" } } },
+      "then": { "properties": { "data": {
+        "required": ["tool", "input", "tool_use_id", "verdict"],
+        "properties": { "verdict": { "type": "object", "required": ["decision"],
+          "properties": { "decision": { "enum": ["allow", "ask", "deny"] } } } } } } } },
+    { "if": { "properties": { "event": { "const": "tool.call.result" } } },
+      "then": { "properties": { "data": { "required": ["tool", "tool_use_id"] } } } },
+    { "if": { "properties": { "event": { "const": "agent.spawn" } } },
+      "then": { "properties": { "data": { "required": ["tool_use_id", "subagentType", "background"],
+        "not": { "required": ["agentId"] } } } } },
+    { "if": { "properties": { "event": { "const": "turn.complete" } } },
+      "then": { "properties": { "data": { "required": ["turnId", "isAborted", "reason"] } } } },
+    { "if": { "properties": { "event": { "const": "session.end" } } },
+      "then": { "properties": { "data": { "required": ["reason", "sessionId"] } } } }
+  ]
+}

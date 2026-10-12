@@ -1,0 +1,8 @@
+{
+  "name": "neg-mapa",
+  "kind": "negative",
+  "spec": "§7",
+  "expect": "reject",
+  "check": "forbidden-type",
+  "note": "Mapa {\"a\":1}. En 0.2.0 no se usan mapas. El bytestring es canónico; la regla es estructural."
+}

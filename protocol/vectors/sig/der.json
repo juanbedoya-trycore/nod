@@ -1,0 +1,115 @@
+{
+  "spec": "§6.3",
+  "note": "DER (Android Keystore / JCA) -> r‖s de 64 bytes. 'raw' sin normalizar; 'raw_low_s' con s <= n/2. 'der_min' es el DER mínimo que se re-codifica desde raw. Los inválidos deben rechazarse.",
+  "valid": [
+    {
+      "name": "real",
+      "note": "Firma real de JCA (lowS=false).",
+      "der": "304402206c30e32c7cbf09d32c9c65b8bd88a597837b1a48b381e399ebddb109574401ba0220458465078abd85738736f8535e415b137f3433cfdeb17fa02822f533018cdc17",
+      "raw": "6c30e32c7cbf09d32c9c65b8bd88a597837b1a48b381e399ebddb109574401ba458465078abd85738736f8535e415b137f3433cfdeb17fa02822f533018cdc17",
+      "raw_low_s": "6c30e32c7cbf09d32c9c65b8bd88a597837b1a48b381e399ebddb109574401ba458465078abd85738736f8535e415b137f3433cfdeb17fa02822f533018cdc17",
+      "der_min": "304402206c30e32c7cbf09d32c9c65b8bd88a597837b1a48b381e399ebddb109574401ba0220458465078abd85738736f8535e415b137f3433cfdeb17fa02822f533018cdc17"
+    },
+    {
+      "name": "r-s-uno",
+      "note": "r = s = 1: enteros de 1 byte, se rellenan a 32.",
+      "der": "3006020101020101",
+      "raw": "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001",
+      "raw_low_s": "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001",
+      "der_min": "3006020101020101"
+    },
+    {
+      "name": "bit-alto",
+      "note": "r y s con el bit alto a 1: llevan 0x00 delante (33 bytes).",
+      "der": "304602210080ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff02210080ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "raw": "80ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "raw_low_s": "80ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7effffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632552",
+      "der_min": "304602210080ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff02210080ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+      "name": "s-alta",
+      "note": "s = n - 1: válida; con low-S pasa a 1.",
+      "der": "3026020101022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632550",
+      "raw": "0000000000000000000000000000000000000000000000000000000000000001ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632550",
+      "raw_low_s": "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001",
+      "der_min": "3026020101022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632550"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "vacio",
+      "note": "Cero bytes.",
+      "der": ""
+    },
+    {
+      "name": "tag-set",
+      "note": "0x31 (SET) en vez de 0x30.",
+      "der": "314402206c30e32c7cbf09d32c9c65b8bd88a597837b1a48b381e399ebddb109574401ba0220458465078abd85738736f8535e415b137f3433cfdeb17fa02822f533018cdc17"
+    },
+    {
+      "name": "longitud-larga",
+      "note": "Longitud de SEQUENCE en forma larga (0x81 0x44): BER, no DER.",
+      "der": "30814402206c30e32c7cbf09d32c9c65b8bd88a597837b1a48b381e399ebddb109574401ba0220458465078abd85738736f8535e415b137f3433cfdeb17fa02822f533018cdc17"
+    },
+    {
+      "name": "longitud-no-cuadra",
+      "note": "Longitud de SEQUENCE mayor que el resto.",
+      "der": "304502206c30e32c7cbf09d32c9c65b8bd88a597837b1a48b381e399ebddb109574401ba0220458465078abd85738736f8535e415b137f3433cfdeb17fa02822f533018cdc17"
+    },
+    {
+      "name": "bytes-de-mas",
+      "note": "Un byte detrás de la SEQUENCE.",
+      "der": "304402206c30e32c7cbf09d32c9c65b8bd88a597837b1a48b381e399ebddb109574401ba0220458465078abd85738736f8535e415b137f3433cfdeb17fa02822f533018cdc1700"
+    },
+    {
+      "name": "bytes-de-mas-dentro",
+      "note": "SEQUENCE con un tercer elemento.",
+      "der": "304602206c30e32c7cbf09d32c9c65b8bd88a597837b1a48b381e399ebddb109574401ba0220458465078abd85738736f8535e415b137f3433cfdeb17fa02822f533018cdc170500"
+    },
+    {
+      "name": "tag-entero",
+      "note": "0x03 en vez de INTEGER para r.",
+      "der": "3006030101020101"
+    },
+    {
+      "name": "r-negativo",
+      "note": "r con el bit alto a 1 sin 0x00 delante.",
+      "der": "3025022080ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff020101"
+    },
+    {
+      "name": "r-no-minimo",
+      "note": "r = 0x00 0x01 (cero sobrante).",
+      "der": "300702020001020101"
+    },
+    {
+      "name": "r-cero",
+      "note": "r = 0.",
+      "der": "3006020100020101"
+    },
+    {
+      "name": "s-igual-n",
+      "note": "s = n.",
+      "der": "3026020101022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551"
+    },
+    {
+      "name": "r-34-bytes",
+      "note": "Entero de 34 bytes.",
+      "der": "302702220000ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632550020101"
+    },
+    {
+      "name": "entero-vacio",
+      "note": "INTEGER de longitud 0.",
+      "der": "30050200020101"
+    },
+    {
+      "name": "truncado",
+      "note": "Le falta el último byte.",
+      "der": "304302206c30e32c7cbf09d32c9c65b8bd88a597837b1a48b381e399ebddb109574401ba0220458465078abd85738736f8535e415b137f3433cfdeb17fa02822f533018cdc"
+    },
+    {
+      "name": "raw-en-vez-de-der",
+      "note": "64 bytes r‖s pasados como DER.",
+      "der": "6c30e32c7cbf09d32c9c65b8bd88a597837b1a48b381e399ebddb109574401ba458465078abd85738736f8535e415b137f3433cfdeb17fa02822f533018cdc17"
+    }
+  ]
+}

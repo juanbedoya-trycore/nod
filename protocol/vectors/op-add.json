@@ -1,0 +1,15 @@
+{
+  "name": "op-add",
+  "kind": "op",
+  "spec": "§5.2",
+  "expect": "accept",
+  "schema": "frame#/$defs/opAdd",
+  "note": "add sin m (5 elementos). Estado inicial run.",
+  "data": [
+    "add",
+    41,
+    "task",
+    7,
+    "Bash"
+  ]
+}

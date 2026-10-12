@@ -1,0 +1,13 @@
+{
+  "name": "op-st",
+  "kind": "op",
+  "spec": "§5.2",
+  "expect": "accept",
+  "schema": "frame#/$defs/opSt",
+  "note": "Cambio de estado a perm.",
+  "data": [
+    "st",
+    41,
+    "perm"
+  ]
+}

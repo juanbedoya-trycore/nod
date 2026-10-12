@@ -1,0 +1,8 @@
+{
+  "name": "neg-null",
+  "kind": "negative",
+  "spec": "§7",
+  "expect": "reject",
+  "check": "forbidden-type",
+  "note": "null (0xf6). En 0.2.0 no se usa null. Canónico; la regla es estructural."
+}

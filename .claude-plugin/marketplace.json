@@ -1,0 +1,7 @@
+{
+  "name": "orbit",
+  "owner": { "name": "Juan Bedoya" },
+  "plugins": [
+    { "name": "orbit", "source": "./", "description": "Tus sesiones de Claude Code en el reloj (Orbit)" }
+  ]
+}

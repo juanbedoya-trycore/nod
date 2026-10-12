@@ -1,0 +1,661 @@
+{
+  "spec": "§6.3, §6.4, §6.5, §10",
+  "note": "Formato de firma 2 (SPEC §6.3). Cada caso: pendiente del mod (lo que envió en /v0/perm/pending) + bytes CBOR exactos de la dec + ahora (s) -> aceptar o rechazar. 'cause' es el motivo fino que comparan Kotlin, el mod y check.mjs; 'reject' es el valor de permResolved.reject. Orden de comprobación: forma, nonce, replay, tool_use_id, ph (recalculado desde el pendiente), kid, firma (sobre el ph recalculado), ts<=exp+30, ahora<=exp, wok. 'signer' es la llave que firmó de verdad (null si no hay firma real).",
+  "generated_by": "android/shared SigVectors.kt (DecisionSigner + SoftwareSigner JCA, low-S)",
+  "paired": [
+    {
+      "kid": "058f0152861814b2",
+      "spki": "3059301306072a8648ce3d020106082a8648ce3d03010703420004054b3a134dbfd021ba97d3d99c175b7b792d3f14e527b2ade3d068b12db8bbdf3474e45eeb758db35f723a3e2acb0d4b2b476e6abeb73fd322cb5d639701d545"
+    }
+  ],
+  "cases": [
+    {
+      "name": "allow-valida",
+      "note": "allow firmada por la llave emparejada, dentro de plazo, sobre el ph del pendiente.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840f4fa3fc6756263e3a4aea27bd96a3a4ef0ee881f1ad9f00fd112de45e9de6418557c44f7b90321c70646b616b4dcf0db3d0b9337ed3efd12427ca8993851c33f5820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "reloj",
+      "expect": "accept"
+    },
+    {
+      "name": "deny-valida",
+      "note": "deny firmada por la llave emparejada.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a756464656e791a6acaedb448058f0152861814b25840148ac161e938e366a1c937e13d21a6f0bc2c88485fdf46b2d2506264d8f4d7703cd7bb907cf968ddf9ab42d0459e4ad2e5e5dfadbe9f0b21d889eab6e99ce0c75820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "reloj",
+      "expect": "accept"
+    },
+    {
+      "name": "deny-con-wok-false",
+      "note": "Un comando prohibido (wok=false) sí se puede denegar desde el reloj.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": false,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a756464656e791a6acaedb448058f0152861814b25840e0aa663bb51116f9ea5e2845d22792b58a5217a01c14c72966f8bbaa3622ca9f7939dbf3a9e1e0b39ba6e6c503b4084d9026f0177e08ee3a31ccbe7085ec9a975820fa547ef478ce5a5a01adc3018cc34c4d1487f1a868d198404d9dbfdc8749fb22",
+      "signer": "reloj",
+      "expect": "accept"
+    },
+    {
+      "name": "allow-con-wok-false",
+      "note": "allow con firma válida (el reloj vio wok=false) de un comando de la lista 'nunca desde el reloj' (§6.4).",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": false,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b2584058c11aa7a539b070de61380e1ec6e48be6e26dc262cec87299ab1ab3e5bf687c1644d2b205c55f56b361a994dabc761f0a4a8489a4161c4d72bd7e2dd9e3ee1e5820fa547ef478ce5a5a01adc3018cc34c4d1487f1a868d198404d9dbfdc8749fb22",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "forbidden",
+      "cause": "forbidden"
+    },
+    {
+      "name": "ts-igual-exp",
+      "note": "Límite: ts = exp y ahora = exp se aceptan (§6.3 usa ≤).",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684080,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedf048058f0152861814b258402c2d9477f6841d1e809fb3b3b055c438fa456b7e6897644add9e10447b5f82c952f25429169c0e8c304147e416c54789689387ee0729318c8148dada4e0134105820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "reloj",
+      "expect": "accept"
+    },
+    {
+      "name": "ts-exp-mas-30",
+      "note": "Reloj adelantado: ts = exp + 30 se acepta (margen de deriva, §6.3).",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaee0e48058f0152861814b25840c37b83094bcae7bfccfe40197572e57c4a63b62a86571f3df3541eedc14b0aa649aa983442aecbe6871731a0459a3675df659be6fca5dd489e985a29c1bfabda5820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "reloj",
+      "expect": "accept"
+    },
+    {
+      "name": "s-alta-aceptada",
+      "note": "La misma firma con s' = n - s (high-S). El mod no exige low-S.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840f4fa3fc6756263e3a4aea27bd96a3a4ef0ee881f1ad9f00fd112de45e9de6418aa83bb0746fcde39f9b949e94b230f247fdb6775b9d8a172b13d2229c41162125820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "reloj",
+      "expect": "accept"
+    },
+    {
+      "name": "firma-alterada",
+      "note": "Último bit de s cambiado.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840f4fa3fc6756263e3a4aea27bd96a3a4ef0ee881f1ad9f00fd112de45e9de6418557c44f7b90321c70646b616b4dcf0db3d0b9337ed3efd12427ca8993851c33e5820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "sig",
+      "cause": "sig"
+    },
+    {
+      "name": "firma-r-alterada",
+      "note": "Bit alto de r cambiado.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b2584074fa3fc6756263e3a4aea27bd96a3a4ef0ee881f1ad9f00fd112de45e9de6418557c44f7b90321c70646b616b4dcf0db3d0b9337ed3efd12427ca8993851c33f5820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "sig",
+      "cause": "sig"
+    },
+    {
+      "name": "firma-de-deny-en-allow",
+      "note": "Trama allow con la firma de la deny del mismo nonce (decision cambiada tras firmar).",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840148ac161e938e366a1c937e13d21a6f0bc2c88485fdf46b2d2506264d8f4d7703cd7bb907cf968ddf9ab42d0459e4ad2e5e5dfadbe9f0b21d889eab6e99ce0c75820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "sig",
+      "cause": "sig"
+    },
+    {
+      "name": "firma-ceros",
+      "note": "r = s = 0.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": null,
+      "expect": "reject",
+      "reject": "sig",
+      "cause": "sig"
+    },
+    {
+      "name": "firma-r-igual-n",
+      "note": "r = n (fuera de rango).",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551557c44f7b90321c70646b616b4dcf0db3d0b9337ed3efd12427ca8993851c33f5820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": null,
+      "expect": "reject",
+      "reject": "sig",
+      "cause": "sig"
+    },
+    {
+      "name": "kid-desconocido",
+      "note": "Firma válida de una llave que no está emparejada.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448c5ce142e84259e6f5840f4100912166a91c47d94633dfa10bacbaad765b704239afe71c88729b862c1e4076a38906d61d2c8fad034e8e1c679d8f07ed7537cf379b0a99b0bf3be5762ad5820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "otra",
+      "expect": "reject",
+      "reject": "kid",
+      "cause": "kid"
+    },
+    {
+      "name": "kid-emparejado-firma-de-otra",
+      "note": "kid de la llave emparejada, firma hecha con otra llave.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840f4100912166a91c47d94633dfa10bacbaad765b704239afe71c88729b862c1e4076a38906d61d2c8fad034e8e1c679d8f07ed7537cf379b0a99b0bf3be5762ad5820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "otra",
+      "expect": "reject",
+      "reject": "sig",
+      "cause": "sig"
+    },
+    {
+      "name": "nonce-cambiado",
+      "note": "Firma válida, pero sobre otro nonce (no corresponde al pendiente).",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "886364656350ffeeddccbbaa99887766554433221100781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b258402f9349bc170b8c3d007610a5fc8426e233877bbc71d1e81a828014751111e85f6d79c4029a2ce18fc36a965a303b7478db1c6a79d83107f71422557a29082a93582038bc2f9e4ea218318e066e3af4fb6d5e26e2dbbd9697986b1e7ee2efab246ae4",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "nonce",
+      "cause": "nonce"
+    },
+    {
+      "name": "nonce-cambiado-tras-firmar",
+      "note": "Nonce sustituido en la trama después de firmar.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "886364656350ffeeddccbbaa99887766554433221100781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840f4fa3fc6756263e3a4aea27bd96a3a4ef0ee881f1ad9f00fd112de45e9de6418557c44f7b90321c70646b616b4dcf0db3d0b9337ed3efd12427ca8993851c33f5820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "nonce",
+      "cause": "nonce"
+    },
+    {
+      "name": "tool-use-id-distinto",
+      "note": "Firma válida con el nonce correcto y otro tool_use_id.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff6a746f6f6c755f6f74726f65616c6c6f771a6acaedb448058f0152861814b25840c0f2aae762b5e2a59f3c1cc5abd278a2b30d3b0f62a3a272a2feb20abfe033e87a8edf98b403816e8d772996a55080c17d2465ddfc14f66cecec268c9c905aea582093106642c5fbb98f400b25f2848a84f0ae42a5b7a38e9b9c08c8a8032543975d",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "tool_use_id",
+      "cause": "tool_use_id"
+    },
+    {
+      "name": "ts-mayor-que-exp-mas-30",
+      "note": "Firma válida con ts = exp + 31 (fuera del margen de deriva).",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaee0f48058f0152861814b25840ad90e0219a83436681f41e81eba53dd58cc170a7518abd22c67ffd18516e6b8422a7b3b6baeb2310c9f419a198b5deb7bce224f48b506399af2232d3f7acf2105820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "expired",
+      "cause": "expired-ts"
+    },
+    {
+      "name": "ahora-mayor-que-exp",
+      "note": "Firma válida, pero llega cuando ahora = exp + 1.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684081,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840f4fa3fc6756263e3a4aea27bd96a3a4ef0ee881f1ad9f00fd112de45e9de6418557c44f7b90321c70646b616b4dcf0db3d0b9337ed3efd12427ca8993851c33f5820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "expired",
+      "cause": "expired-now"
+    },
+    {
+      "name": "replay",
+      "note": "Firma válida de un permiso ya resuelto (nonce usado, §10).",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": true,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840f4fa3fc6756263e3a4aea27bd96a3a4ef0ee881f1ad9f00fd112de45e9de6418557c44f7b90321c70646b616b4dcf0db3d0b9337ed3efd12427ca8993851c33f5820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "replay",
+      "cause": "replay"
+    },
+    {
+      "name": "ph-cambiado",
+      "note": "Firma válida; el ph de la trama se cambió después de firmar.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840f4fa3fc6756263e3a4aea27bd96a3a4ef0ee881f1ad9f00fd112de45e9de6418557c44f7b90321c70646b616b4dcf0db3d0b9337ed3efd12427ca8993851c33f5820dd8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "ph",
+      "cause": "ph"
+    },
+    {
+      "name": "tool-cambiado",
+      "note": "El servidor enseñó tool=Write: el reloj firmó el ph de lo que vio, no el del pendiente (Bash).",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b258400048a42c449fa7c91d9ed4f75b2c53c2a5d0fa059834641a4dbcd78aac60f6977c3a4b8bef67e2e6ea1a40c946e48de7cb0dc6b2002b414c80d63d9a7b16b68b582038659105977fd905f920d6b657501e511525b923460264676693cbdd6eb32ab0",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "ph",
+      "cause": "ph"
+    },
+    {
+      "name": "sum-cambiado",
+      "note": "El servidor enseñó sum='ls': el reloj firmó el ph de lo que vio, no el del pendiente.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840c9ec108754e14bbae02fba4adce786aacd45c40b3ab53a9f89d9fe1e95a668405024ca95ed23901c0a0f6bac8264b03efeb0c32a0a87ca76f6b6bcfe47750f1d5820fe062cef4aebcf425bad27808869477aae3ffea4885282e891dca1760bd71a2e",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "ph",
+      "cause": "ph"
+    },
+    {
+      "name": "wok-cambiado",
+      "note": "El servidor enseñó wok=true para un comando prohibido (wok=false en el pendiente) para que el reloj pudiera aprobar.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": false,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840d069a25cb50576106818bee63ce2b7c2ccf111b8ea611f0866f09014564d44b15d09159b1ec33d3187eabb017345d52ee229aa80009895fdf0f26d9f5a2de2ee5820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "ph",
+      "cause": "ph"
+    },
+    {
+      "name": "instance-id-cambiado",
+      "note": "El servidor enseñó la instancia mac-work en vez de mac-personal.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840c894ba2dde0a8ccba5437e56aba3b643fa4a7c81c48b7ce77c0df1db12ef88f62613f5e1eb4d82c7fcd490cc5d7908dd107663bd6f631702de2235947b716a3158201f5d121d3d2c277323fb4cf3390aea27fcf9e95abc8d1ef4824ca1ba175573e4",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "ph",
+      "cause": "ph"
+    },
+    {
+      "name": "exp-cambiado",
+      "note": "El servidor enseñó un exp 10 min más tarde.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840db23a0b296937a6e8ea376ebfad489673aa736428af2c9ea7f82d97a2e61ffaa16eabee3e942c845ffcb006e79c91ed854161c1cd3e96175c9236801d2030684582053c8649f17b14d181baf5c3bf55098be5b3363cf7a1e24a2e4fcf5a5a5051fba",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "ph",
+      "cause": "ph"
+    },
+    {
+      "name": "ph-correcto-firma-de-otro",
+      "note": "sum-cambiado con el ph de la trama sustituido por el correcto: el mod verifica sobre su ph y la firma no cuadra.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840c9ec108754e14bbae02fba4adce786aacd45c40b3ab53a9f89d9fe1e95a668405024ca95ed23901c0a0f6bac8264b03efeb0c32a0a87ca76f6b6bcfe47750f1d5820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "sig",
+      "cause": "sig"
+    },
+    {
+      "name": "formato-1",
+      "note": "dec de 7 elementos (sin ph) con firma de formato 1: ya no se acepta.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "87636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840a8458f822507d4f56e4a83fab3499d4dc51b80e7488e066d3e8fc81a936339d2285d9797b8244c220a10ba4484bbf0eb82321731d9ffaa302f6d7f74b6902164",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "malformed",
+      "cause": "malformed"
+    },
+    {
+      "name": "formato-1-firma-con-ph",
+      "note": "Trama de formato 2 con el ph correcto pero firma de formato 1 (sin ph en la entrada firmada).",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b25840a8458f822507d4f56e4a83fab3499d4dc51b80e7488e066d3e8fc81a936339d2285d9797b8244c220a10ba4484bbf0eb82321731d9ffaa302f6d7f74b69021645820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": "reloj",
+      "expect": "reject",
+      "reject": "sig",
+      "cause": "sig"
+    },
+    {
+      "name": "sig-en-der",
+      "note": "El reloj olvidó convertir: sig en DER (70-72 bytes) en vez de r‖s. La trama no es válida.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771a6acaedb448058f0152861814b258473045022100f4fa3fc6756263e3a4aea27bd96a3a4ef0ee881f1ad9f00fd112de45e9de64180220557c44f7b90321c70646b616b4dcf0db3d0b9337ed3efd12427ca8993851c33f5820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": null,
+      "expect": "reject",
+      "reject": "malformed",
+      "cause": "malformed"
+    },
+    {
+      "name": "cbor-no-determinista",
+      "note": "La dec válida con ts codificado en 9 bytes en vez de 5.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "88636465635000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7565616c6c6f771b000000006acaedb448058f0152861814b25840f4fa3fc6756263e3a4aea27bd96a3a4ef0ee881f1ad9f00fd112de45e9de6418557c44f7b90321c70646b616b4dcf0db3d0b9337ed3efd12427ca8993851c33f5820dc8421feb36da23df8a3ae368dca81a68118257c9c3206d7ab0a31e55bc37b29",
+      "signer": null,
+      "expect": "reject",
+      "reject": "malformed",
+      "cause": "malformed"
+    },
+    {
+      "name": "no-es-dec",
+      "note": "Una trama perm donde se esperaba dec.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "89647065726d5000112233445566778899aabbccddeeff781e746f6f6c755f30314a7531466356794c78327531516a74544844465a4a7518291a6acaedf0644261736876746f756368207461726765742d616c6c6f772e747874f56c6d61632d706572736f6e616c",
+      "signer": null,
+      "expect": "reject",
+      "reject": "malformed",
+      "cause": "malformed"
+    },
+    {
+      "name": "bytes-vacios",
+      "note": "Cuerpo vacío.",
+      "pending": {
+        "nonce": "00112233445566778899aabbccddeeff",
+        "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+        "exp": 1791684080,
+        "wok": true,
+        "resolved": false,
+        "instance_id": "mac-personal",
+        "tool": "Bash",
+        "sum": "touch target-allow.txt"
+      },
+      "now": 1791684020,
+      "dec": "",
+      "signer": null,
+      "expect": "reject",
+      "reject": "malformed",
+      "cause": "malformed"
+    }
+  ]
+}

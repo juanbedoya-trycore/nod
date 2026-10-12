@@ -1,0 +1,21 @@
+{
+  "name": "frame-delta-salto-seq",
+  "kind": "frame",
+  "spec": "§5.3",
+  "expect": "accept",
+  "schema": "frame",
+  "note": "Salto de seq: el cliente tenía last_seq 10 y recibe seq 12. Debe descartarla, dejar de aplicar y pedir snap con req. Sin seq 11 no hay forma de aplicarla.",
+  "data": [
+    "d",
+    3,
+    12,
+    1791683945,
+    [
+      [
+        "st",
+        41,
+        "done"
+      ]
+    ]
+  ]
+}

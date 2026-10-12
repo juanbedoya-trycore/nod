@@ -1,0 +1,23 @@
+{
+  "name": "frame-delta-label-truncada",
+  "kind": "frame",
+  "spec": "§2, §10",
+  "expect": "accept",
+  "schema": "frame",
+  "note": "Etiqueta multibyte cortada a <= 32 bytes en frontera de code point.",
+  "data": [
+    "d",
+    3,
+    51,
+    1791683941,
+    [
+      [
+        "add",
+        51,
+        "task",
+        7,
+        "Ñandú 日本語 análisis de s"
+      ]
+    ]
+  ]
+}

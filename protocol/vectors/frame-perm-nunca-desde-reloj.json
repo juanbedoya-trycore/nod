@@ -1,0 +1,21 @@
+{
+  "name": "frame-perm-nunca-desde-reloj",
+  "kind": "frame",
+  "spec": "§6.4",
+  "expect": "accept",
+  "schema": "frame",
+  "note": "Permiso de un comando prohibido (rm -rf): wok=false, el reloj solo puede denegar.",
+  "data": [
+    "perm",
+    {
+      "$hex": "ffeeddccbbaa99887766554433221100"
+    },
+    "toolu_02Xk9QdRzMn3v4PbLsWq8TzE",
+    41,
+    1791684030,
+    "Bash",
+    "rm -rf build",
+    false,
+    "mac-personal"
+  ]
+}

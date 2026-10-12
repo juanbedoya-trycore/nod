@@ -1,0 +1,57 @@
+{
+  "name": "frame-delta-snap",
+  "kind": "frame",
+  "spec": "§5.5",
+  "expect": "accept",
+  "schema": "frame",
+  "note": "Snap con 4 nodos ordenados por id ascendente (el padre antes que el hijo). Única op de la trama.",
+  "data": [
+    "d",
+    3,
+    43,
+    1791683941,
+    [
+      [
+        "snap",
+        [
+          [
+            7,
+            "session",
+            0,
+            "run",
+            "Orbit",
+            0,
+            1791683936
+          ],
+          [
+            8,
+            "agent",
+            7,
+            "run",
+            "general-purpose",
+            0,
+            1791683942
+          ],
+          [
+            9,
+            "mcp",
+            7,
+            "run",
+            "echo",
+            0,
+            1791683940
+          ],
+          [
+            42,
+            "task",
+            8,
+            "perm",
+            "echo",
+            9,
+            1791683944
+          ]
+        ]
+      ]
+    ]
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "name": "ingest-evento-crudo",
+  "kind": "ingest",
+  "spec": "§3.1, §3.3",
+  "expect": "accept",
+  "schema": "ingest",
+  "note": "Sobre de ingesta JSON (src=mod, ctx=personal) con un evento PreToolUse. La ingesta es JSON en 0.2.0: no tiene .cbor.",
+  "data": {
+    "orbit": "0.2.0",
+    "instance_id": "mac-personal",
+    "ctx": "personal",
+    "src": "mod",
+    "events": [
+      {
+        "n": 17,
+        "rx": 1791683886699,
+        "ev": {
+          "session_id": "617d2751-451e-4785-8fb3-a9486bad9b19",
+          "hook_event_name": "PreToolUse",
+          "cwd": "/Users/dev/Documents/GitHub/Orbit",
+          "tool_name": "Bash",
+          "tool_use_id": "toolu_01Ju1FcVyLx2u1QjtTHDFZJu",
+          "tool_input": {
+            "command": "touch target-allow.txt"
+          }
+        }
+      }
+    ]
+  }
+}

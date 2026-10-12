@@ -1,0 +1,11 @@
+{
+  "schema": "frame",
+  "data": [
+    "pclose",
+    {
+      "$hex": "00112233445566778899aabbccddeeff"
+    },
+    "terminal",
+    "allow"
+  ]
+}

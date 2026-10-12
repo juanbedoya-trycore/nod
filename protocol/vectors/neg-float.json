@@ -1,0 +1,8 @@
+{
+  "name": "neg-float",
+  "kind": "negative",
+  "spec": "§7",
+  "expect": "reject",
+  "check": "forbidden-type",
+  "note": "Float64 1.5. En 0.2.0 no hay floats. Canónico; la regla es estructural."
+}

@@ -1,0 +1,17 @@
+{
+  "name": "node-session",
+  "kind": "node",
+  "spec": "§4.1, §5.5",
+  "expect": "accept",
+  "schema": "frame#/$defs/node",
+  "note": "Nodo de sesión (p=0). En snap, m=0.",
+  "data": [
+    7,
+    "session",
+    0,
+    "run",
+    "Orbit",
+    0,
+    1791683936
+  ]
+}
