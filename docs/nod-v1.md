@@ -1,6 +1,6 @@
 # Nod v1: el flujo de eventos
 
-Nod observa una sesión de un agente de código (hoy Claude Code) y emite **eventos Nod v1**: un flujo
+Nod observa una sesión de un agente de código (hoy Claude Code y OpenCode) y emite **eventos Nod v1**: un flujo
 normalizado, independiente del agente y de quien lo consuma. Un consumidor (un collector de métricas, el
 servidor de Orbit, un fichero) no necesita saber nada del agente: solo este documento.
 
@@ -55,7 +55,7 @@ ella `seq` empieza en 1 y crece de uno en uno. La identidad de un evento es (`so
 | `nod` | versión del formato: `1` |
 | `source.instance` | identidad estable del emisor: por defecto `<perfil>-<id aleatorio del perfil en esta máquina>` (no lleva el nombre del equipo). `NOD_INSTANCE` la fija |
 | `source.run` | ejecución (proceso) del agente, 8 hex |
-| `source.host` | agente: `claude` (después `opencode`, `codex`…) |
+| `source.host` | agente: `claude`, `opencode` (después `codex`…) |
 | `source.host_version` | versión del agente, *opc.* |
 | `source.machine` | nombre corto de la máquina, *opc.*; solo con privacidad `completo` |
 | `source.profile` | perfil del agente (el nombre de su directorio de configuración) |
@@ -80,9 +80,9 @@ Tiempos en `*_ms`; tokens en `usage` = `{ "input", "output", "cache_read", "cach
 
 | `type` | Cuándo | `data` |
 | --- | --- | --- |
-| `session.start` | empieza la sesión | `interactive`; *opc.*: `cwd`, `repo` {`root`, `remote`, `name`, `branch`}, `model`, `surface` (`terminal`, `ide`…), `remote_session` (sesión de Remote Control de claude.ai: la abre en la app de Claude), `continued` (`true`: el agente cambió de sesión sin anunciarlo, p. ej. tras `/clear`) |
+| `session.start` | empieza la sesión | `interactive`; *opc.*: `cwd`, `repo` {`root`, `remote`, `name`, `branch`}, `model`, `surface` (`terminal`, `ide`, `cli` = `opencode run`, `server` = `opencode serve`…), `remote_session` (sesión de Remote Control de claude.ai: la abre en la app de Claude), `continued` (`true`: el agente cambió de sesión sin anunciarlo, p. ej. tras `/clear`) |
 | `session.end` | termina | `reason` (`exit`, `clear`…), `duration_ms` |
-| `prompt.submit` | se envía un prompt | `origin` (`composer` = el humano; `task-notification`, `queue`… = otros), `chars`; *opc.*: `text`, `edit` {`events`, `typing_ms`, `recalled`, `revised`} (solo en `composer`) |
+| `prompt.submit` | se envía un prompt | `origin` (`composer` = el humano en el editor; `cli` = el prompt de `opencode run`, `command` = lo que expande un comando de barra; `task-notification`, `queue`, `api`… = otros), `chars`; *opc.*: `text`, `edit` {`events`, `typing_ms`, `recalled`, `revised`} (solo en `composer`) |
 | `turn.start` | empieza un turno de la sesión principal (los subagentes no lo tienen) | — |
 | `turn.step` | termina una llamada al modelo | `index`, `tools` (nombres), `usage`; *opc.*: `model`, `effort`, `stop_reason`, `partial` (`true`: sin motivo de parada, la llamada se cortó y `usage` puede quedarse corto) |
 | `turn.end` | termina el turno | `outcome` (`answer`, `aborted`…), `usage` (suma de sus pasos), `steps`, `answer_chars`; *opc.*: `duration_ms` (lo da el agente; si falta, un consumidor puede usar `ts` de `turn.end` menos el de `turn.start`), `answer` |
@@ -106,6 +106,10 @@ Tiempos en `*_ms`; tokens en `usage` = `{ "input", "output", "cache_read", "cach
   su ejecución (en Claude, la duración del hook clásico `PostToolUse`). Si el agente no la da, `wait_ms` es una
   cota superior y `exact: false`. Las negativas siempre son exactas.
 - **Negado.** «Negado por el humano» = `deny` con `by` `user` o `remote`; un `deny` con `by: "policy"` es un bloqueo por regla, no una decisión humana.
+- **OpenCode** publica la respuesta a cada permiso (`permission.replied`): la espera de `by: "user"` es exacta
+  también al aprobar. No avisa de lo que resuelven sus reglas sin preguntar, así que de OpenCode no salen
+  decisiones `by: "policy"`, salvo en `opencode run`, que contesta él mismo al instante (rechaza, o aprueba con
+  `--auto`) y no emite `permission.request`.
 - Un permiso preguntado que sigue sin respuesta al cerrar su turno (Esc en el diálogo) cuenta como `deny` por
   `user`.
 - **Tiempo bloqueado esperando al humano** = Σ `wait_ms` con `by: "user"` (y `remote`). El tiempo de un mod que

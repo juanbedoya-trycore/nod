@@ -85,6 +85,9 @@ export interface Summary {
   exact: boolean;
 }
 
+const SHELL = new Set(["Bash", "bash"]);
+const FILE = new Set(["Edit", "Write", "Read", "edit", "write", "read"]);
+
 function field(input: unknown, key: string): string | undefined {
   if (input === null || typeof input !== "object") return undefined;
   const v = (input as Record<string, unknown>)[key];
@@ -105,13 +108,15 @@ function compactJson(input: unknown): string {
  * permiso (con `redactado`, el servidor MCP ya va oculto).
  */
 export function summarize(privacy: Privacy, tool: string, input: unknown, label = tool): Summary {
+  // Claude Code las llama Bash, Edit…; OpenCode, bash, edit… (y la ruta va en `filePath`).
+  const kind = SHELL.has(tool) ? "shell" : FILE.has(tool) ? "file" : undefined;
   if (privacy !== "completo") {
-    const verb = tool === "Bash" ? verbOf(field(input, "command")) : undefined;
+    const verb = kind === "shell" ? verbOf(field(input, "command")) : undefined;
     return { summary: truncateUtf8(verb ?? label, SUMMARY_MAX_BYTES), exact: true };
   }
   let text: string;
-  if (tool === "Bash") text = field(input, "command") ?? compactJson(input);
-  else if (tool === "Edit" || tool === "Write" || tool === "Read") text = field(input, "file_path") ?? compactJson(input);
+  if (kind === "shell") text = field(input, "command") ?? compactJson(input);
+  else if (kind === "file") text = field(input, "file_path") ?? field(input, "filePath") ?? compactJson(input);
   else text = compactJson(input);
   const summary = truncateUtf8(redactSecrets(text), SUMMARY_MAX_BYTES);
   return { summary, exact: summary === text && !HIDDEN_RE.test(text) };

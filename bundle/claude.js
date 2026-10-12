@@ -5653,6 +5653,20 @@ var Normalizer = class {
     if (p === void 0 || p.askTs === void 0 || p.decidedTs !== void 0) return [];
     return [this.decision(ts, session, id, p, decision, "remote")];
   }
+  /**
+   * El agente avisa de quién decidió un permiso y en qué instante (OpenCode publica la respuesta). Con eso no hace
+   * falta deducirla del resultado de la tool: la espera es exacta. Si ya estaba decidido (p. ej. por un aprobador
+   * remoto, cuya respuesta vuelve luego como la de cualquiera), no emite nada.
+   */
+  decided(ts, session, id, tool, decision, by) {
+    let p = this.tools.get(id);
+    if (p === void 0) {
+      p = { tool, agent: void 0, turn: void 0, callTs: ts };
+      this.tools.set(id, p);
+    }
+    if (p.decidedTs !== void 0) return [];
+    return [this.decision(ts, session, id, p, decision, by)];
+  }
   /** `exact` = false: el instante de la respuesta no se vio y `wait_ms` es una cota superior. */
   decision(ts, session, id, p, decision, by, exact = true) {
     p.decidedTs = ts;
@@ -5777,6 +5791,8 @@ function redactSecrets(text) {
   return out;
 }
 var HIDDEN_RE = /[\p{Cf}\u0000-\u0008\u000B-\u001F\u007F-\u009F]/u;
+var SHELL = /* @__PURE__ */ new Set(["Bash", "bash"]);
+var FILE = /* @__PURE__ */ new Set(["Edit", "Write", "Read", "edit", "write", "read"]);
 function field(input, key) {
   if (input === null || typeof input !== "object") return void 0;
   const v = input[key];
@@ -5791,13 +5807,14 @@ function compactJson(input) {
   }
 }
 function summarize(privacy, tool, input, label = tool) {
+  const kind = SHELL.has(tool) ? "shell" : FILE.has(tool) ? "file" : void 0;
   if (privacy !== "completo") {
-    const verb = tool === "Bash" ? verbOf(field(input, "command")) : void 0;
+    const verb = kind === "shell" ? verbOf(field(input, "command")) : void 0;
     return { summary: truncateUtf8(verb ?? label, SUMMARY_MAX_BYTES), exact: true };
   }
   let text;
-  if (tool === "Bash") text = field(input, "command") ?? compactJson(input);
-  else if (tool === "Edit" || tool === "Write" || tool === "Read") text = field(input, "file_path") ?? compactJson(input);
+  if (kind === "shell") text = field(input, "command") ?? compactJson(input);
+  else if (kind === "file") text = field(input, "file_path") ?? field(input, "filePath") ?? compactJson(input);
   else text = compactJson(input);
   const summary = truncateUtf8(redactSecrets(text), SUMMARY_MAX_BYTES);
   return { summary, exact: summary === text && !HIDDEN_RE.test(text) };
@@ -6538,6 +6555,10 @@ var NodEngine = class {
       p.log(`nod: retenci\xF3n fall\xF3 (${String(err)})`);
       return void 0;
     }
+  }
+  /** El agente dice quién decidió un permiso y cuándo (si no lo dice, se deduce del resultado de la tool). */
+  async permissionDecided(p, session, id, tool, decision, by) {
+    await this.guard(p, "permission.decision", async (now) => this.norm.decided(now, session, id, tool, decision, by));
   }
   /** Mensaje de un aprobador llegado a mitad de turno, para el resultado de una tool de la sesión principal. */
   takeNote(agent) {

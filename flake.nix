@@ -1,5 +1,5 @@
 {
-  description = "Nod: observa tus sesiones con agentes de código y entrega eventos Nod v1 (plugin de Claude Code y módulo de home-manager)";
+  description = "Nod: observa tus sesiones con agentes de código y entrega eventos Nod v1 (plugins de Claude Code y OpenCode, y módulo de home-manager)";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
@@ -23,6 +23,13 @@
           cp ${./LICENSE} $out/LICENSE
         '';
         default = plugin;
+
+        # El plugin de OpenCode: un solo fichero (bundle/opencode.js) que OpenCode carga desde su carpeta de
+        # plugins. Va aparte del de Claude Code: allí solo se enlaza este fichero, sin el marketplace.
+        opencode = pkgs.runCommand "nod-opencode-plugin-${version}" { } ''
+          mkdir -p $out
+          cp ${./bundle/opencode.js} $out/nod.js
+        '';
 
         # nod-collector: guarda los eventos, calcula métricas y da los límites para tmux (collector/).
         collector = pkgs.rustPlatform.buildRustPackage {
