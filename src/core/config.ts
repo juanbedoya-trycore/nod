@@ -16,6 +16,9 @@ export interface NodEnv {
   NOD_TASK?: string | undefined;
   NOD_CONFIG?: string | undefined;
   NOD_OFF?: string | undefined;
+  NOD_CONTROL?: string | undefined;
+  NOD_CONTROL_TOKEN?: string | undefined;
+  NOD_FORBIDDEN_ADD?: string | undefined;
   HOME?: string | undefined;
   XDG_CONFIG_HOME?: string | undefined;
   XDG_STATE_HOME?: string | undefined;
@@ -26,7 +29,25 @@ export interface SinkConfig {
   /** Ruta absoluta (file) o URL base (http, sin /v1/events). */
   target: string;
   token?: string | undefined;
+  /** Fichero del que se lee el token al arrancar (`token_file`): el token no tiene que ir en la configuración. */
+  tokenFile?: string | undefined;
 }
+
+/** Canal de control (docs/control-v1.md §2). */
+export interface ControlConfig {
+  /** URL base del controlador, sin barra final. */
+  url: string;
+  token?: string | undefined;
+  tokenFile?: string | undefined;
+  /** Cuánto se retiene un permiso (1000…90000). */
+  holdMs: number;
+  /** Por qué no se usa, si la configuración lo impide (el token iría en claro, el token_file no se lee…). */
+  off?: string | undefined;
+}
+
+export const HOLD_MS_DEFAULT = 20_000;
+export const HOLD_MS_MIN = 1_000;
+export const HOLD_MS_MAX = 90_000;
 
 export interface Config {
   enabled: boolean;
@@ -34,6 +55,8 @@ export interface Config {
   privacy: Privacy;
   sinks: SinkConfig[];
   task: string | undefined;
+  /** Canal de control; undefined = sin configurar (Nod no retiene ni cambia nada). */
+  control: ControlConfig | undefined;
   /** De dónde salió: para `/nod`. */
   source: string;
 }
@@ -42,6 +65,7 @@ interface FileSection {
   sinks?: unknown;
   privacy?: unknown;
   instance?: unknown;
+  control?: unknown;
 }
 
 interface ConfigFile extends FileSection {
@@ -63,8 +87,14 @@ export function configPath(env: NodEnv): string | undefined {
 }
 
 export function defaultLogPath(env: NodEnv): string | undefined {
-  if (env.XDG_STATE_HOME) return `${env.XDG_STATE_HOME}/nod/events.jsonl`;
-  return env.HOME ? `${env.HOME}/.local/state/nod/events.jsonl` : undefined;
+  const dir = stateDir(env);
+  return dir === undefined ? undefined : `${dir}/events.jsonl`;
+}
+
+/** Estado de Nod en la máquina (no del perfil): eventos por defecto, llaves emparejadas, K's, modo lejos. */
+export function stateDir(env: NodEnv): string | undefined {
+  if (env.XDG_STATE_HOME) return `${env.XDG_STATE_HOME}/nod`;
+  return env.HOME ? `${env.HOME}/.local/state/nod` : undefined;
 }
 
 function expandHome(p: string, home: string | undefined): string {
@@ -107,8 +137,15 @@ function sinksFrom(v: unknown, home: string | undefined, warnings: string[], whe
       continue;
     }
     const parsed = parseSink(raw, home, typeof o?.token === "string" ? o.token : undefined);
-    if (typeof parsed === "string") warnings.push(`${where}: ${parsed}`);
-    else out.push(parsed);
+    if (typeof parsed === "string") {
+      warnings.push(`${where}: ${parsed}`);
+      continue;
+    }
+    if (typeof o?.token_file === "string" && parsed.kind === "http") {
+      if (parsed.token !== undefined) warnings.push(`${where}: ${parsed.target} tiene "token" y "token_file": uso "token"`);
+      else parsed.tokenFile = expandHome(o.token_file, home);
+    }
+    out.push(parsed);
   }
   return out;
 }
@@ -175,7 +212,75 @@ export function resolveConfig(env: NodEnv, fileText: string | undefined, profile
 
   const source = env.NOD_SINKS ? "variables NOD_*" : fileText !== undefined ? String(path) : "valores por defecto";
   const task = env.NOD_TASK?.trim() || undefined;
-  return { config: { enabled: env.NOD_OFF !== "1", instance, privacy, sinks, task, source }, warnings };
+  const control = controlFrom(env, section.control ?? file.control, warnings, String(path));
+  return { config: { enabled: env.NOD_OFF !== "1", instance, privacy, sinks, task, control, source }, warnings };
+}
+
+/** `NOD_CONTROL=off` (o `0`, `no`) apaga el canal aunque el fichero lo configure. */
+const OFF_RE = /^(off|0|no|false)$/i;
+
+function controlFrom(env: NodEnv, raw: unknown, warnings: string[], where: string): ControlConfig | undefined {
+  const fromEnv = env.NOD_CONTROL?.trim();
+  if (fromEnv !== undefined && OFF_RE.test(fromEnv)) return undefined;
+  const o = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : undefined;
+  if (raw !== undefined && o === undefined) warnings.push(`${where}: "control" debe ser un objeto`);
+  const url = fromEnv || (typeof o?.url === "string" ? o.url : undefined);
+  if (url === undefined) return undefined;
+  const label = fromEnv ? "NOD_CONTROL" : `${where} (control)`;
+  const parsed = parseSink(url, env.HOME);
+  if (typeof parsed === "string" || parsed.kind !== "http") {
+    warnings.push(`${label}: el controlador debe ser una URL http(s) sin usuario, contraseña ni parámetros`);
+    return undefined;
+  }
+  const c: ControlConfig = { url: parsed.target, holdMs: HOLD_MS_DEFAULT };
+  if (env.NOD_CONTROL_TOKEN) c.token = env.NOD_CONTROL_TOKEN;
+  else if (typeof o?.token === "string" && o.token !== "") c.token = o.token;
+  else if (typeof o?.token_file === "string" && o.token_file !== "") c.tokenFile = expandHome(o.token_file, env.HOME);
+  if (o?.hold_ms !== undefined) {
+    const n = Number(o.hold_ms);
+    if (!Number.isFinite(n)) warnings.push(`${label}: hold_ms "${String(o.hold_ms)}" no es un número: uso ${HOLD_MS_DEFAULT}`);
+    else {
+      c.holdMs = Math.min(HOLD_MS_MAX, Math.max(HOLD_MS_MIN, Math.round(n)));
+      if (c.holdMs !== n) warnings.push(`${label}: hold_ms debe estar entre ${HOLD_MS_MIN} y ${HOLD_MS_MAX}: uso ${c.holdMs}`);
+    }
+  }
+  // Con token, el controlador puede aprobar en nombre del usuario lo que le enseñe un aprobador: no viaja en claro.
+  if ((c.token !== undefined || c.tokenFile !== undefined) && !c.url.startsWith("https://") && !isLocalUrl(c.url)) {
+    c.off = `el token no se manda en claro a ${c.url} (usa https)`;
+    warnings.push(`control: ${c.off}`);
+  }
+  return c;
+}
+
+/** Por qué el canal no se usa con esta privacidad, o undefined si se usa. */
+export function controlBlocked(c: ControlConfig | undefined, privacy: Privacy): string | undefined {
+  if (c === undefined) return "sin configurar";
+  if (c.off !== undefined) return c.off;
+  if (privacy === "trabajo" && !isLocalUrl(c.url)) return "privacidad trabajo y el controlador no es local";
+  return undefined;
+}
+
+/**
+ * Lee los `token_file` (de los destinos y del controlador) con `read`. Un fichero que no se lee deja el
+ * destino sin token (el destino lo rechazará y la cola espera) y apaga el canal de control.
+ */
+export async function loadTokenFiles(config: Config, read: (path: string) => Promise<string>, warnings: string[]): Promise<void> {
+  const load = async (path: string): Promise<string | undefined> => {
+    try {
+      const t = (await read(path)).trim();
+      if (t !== "") return t;
+      warnings.push(`token_file ${path} está vacío`);
+    } catch {
+      warnings.push(`token_file ${path} no se puede leer`);
+    }
+    return undefined;
+  };
+  for (const s of config.sinks) if (s.tokenFile !== undefined && s.token === undefined) s.token = await load(s.tokenFile);
+  const c = config.control;
+  if (c?.tokenFile !== undefined && c.token === undefined) {
+    c.token = await load(c.tokenFile);
+    if (c.token === undefined) c.off ??= `no se pudo leer el token (${c.tokenFile})`;
+  }
 }
 
 /** `personal-3fa9c2d1`: perfil e id aleatorio del perfil en esta máquina, en minúsculas y sin caracteres raros. */
