@@ -295,13 +295,13 @@ export class ControlChannel {
         if (r.paired.length > 0) {
           const names = r.paired.map((k) => k.name ?? k.kid).join(", ");
           p.log(`nod control: aprobador emparejado: ${names}`);
-          quiet(() => p.toast?.(`Nod: aprobador emparejado (${names})`));
+          quiet(() => p.toast?.(`aprobador emparejado (${names})`));
         } else {
-          quiet(() => p.toast?.("Nod: no llegó la oferta en 2 min. El QR sigue valiendo: se emparejará en la siguiente sesión o permiso."));
+          quiet(() => p.toast?.("no llegó la oferta en 2 min. El QR sigue valiendo: se emparejará en la siguiente sesión o permiso."));
         }
         return;
       }
-      quiet(() => p.status?.(`Nod: escanea el QR con el aprobador… (${Math.ceil((this.pairUntil - now) / 1000)} s)`));
+      quiet(() => p.status?.(`escanea el QR con el aprobador… (${Math.ceil((this.pairUntil - now) / 1000)} s)`));
       this.pairWatch = p.after(PAIR_POLL_MS, () => void tick().catch(() => undefined));
     };
     void tick().catch(() => undefined);
