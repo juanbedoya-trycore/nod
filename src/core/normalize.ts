@@ -72,6 +72,8 @@ interface PendingTool {
   callTs: number;
   askTs?: number;
   decidedTs?: number;
+  /** Duración de la ejecución según el agente (en Claude, el hook clásico PostToolUse). */
+  execMs?: number;
 }
 
 interface AgentRun {
@@ -81,15 +83,28 @@ interface AgentRun {
 
 /** Cuántos prompts recientes se recuerdan para reconocer uno sacado del historial. */
 const RECALL_MEMORY = 50;
+/** Tope de subagentes recordados (para su agent.end): una sesión larga no crece sin límite. */
+const MAX_AGENTS = 256;
 
-/** Primera palabra de un comando de shell, sin asignaciones de variables delante (`FOO=1 npm test` → `npm`). */
+/**
+ * Primera palabra de un comando de shell, sin asignaciones de variables ni envoltorios (`FOO=1 sudo npm test`
+ * → `npm`). Solo si es un nombre de programa limpio: con comillas, subshell, variables o rutas raras devuelve
+ * undefined (podría arrastrar un trozo de secreto o el nombre de un fichero del cliente).
+ */
 export function verbOf(command: unknown): string | undefined {
   if (typeof command !== "string") return undefined;
   for (const w of command.trim().split(/\s+/)) {
-    if (w === "" || /^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) continue;
-    if (w === "sudo" || w === "env" || w === "exec" || w === "time") continue;
-    const base = w.split("/").pop() ?? w;
-    return base.slice(0, 40);
+    if (w === "") continue;
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) {
+      // Una asignación con comillas puede seguir en las palabras siguientes: no se adivina.
+      if (/['"`$(]/.test(w)) return undefined;
+      continue;
+    }
+    if (w === "sudo" || w === "env" || w === "exec" || w === "time" || w === "nohup") continue;
+    const base = w.includes("/") ? w.slice(w.lastIndexOf("/") + 1) : w;
+    // Un script propio (`deploy-acme.sh`) dice más de lo que debe: solo nombres de programa sin extensión de script.
+    if (!/^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/.test(base) || /\.(sh|py|rb|js|ts|pl|bash|zsh)$/i.test(base)) return undefined;
+    return base;
   }
   return undefined;
 }
@@ -114,7 +129,18 @@ export class Normalizer {
     return d;
   }
 
+  /** Olvida lo propio de la sesión anterior (tools, turnos, subagentes, lo tecleado). La tarea sigue. */
+  resetSession(): void {
+    this.tools.clear();
+    this.agents.clear();
+    this.turnSteps.clear();
+    this.current.clear();
+    this.edit = undefined;
+    this.sessionStartTs = undefined;
+  }
+
   sessionStart(ts: number, session: string, info: SessionInfo): Draft[] {
+    this.resetSession();
     this.sessionStartTs = ts;
     const data: Record<string, unknown> = { interactive: info.interactive === true };
     if (info.cwd !== undefined) data.cwd = info.cwd;
@@ -143,10 +169,13 @@ export class Normalizer {
 
   promptSubmit(ts: number, session: string, p: { text: string; origin: string }): Draft[] {
     const data: Record<string, unknown> = { origin: p.origin, chars: p.text.length, text: p.text };
-    if (this.edit !== undefined) {
-      data.edit = { events: this.edit.events, typing_ms: Math.max(0, ts - this.edit.first), recalled: this.edit.recalled, revised: this.edit.revised };
+    // Solo un prompt del humano (el editor) se lleva lo que se tecleó; los que mete el agente no lo tocan.
+    if (p.origin === "composer") {
+      if (this.edit !== undefined) {
+        data.edit = { events: this.edit.events, typing_ms: Math.max(0, ts - this.edit.first), recalled: this.edit.recalled, revised: this.edit.revised };
+      }
+      this.edit = undefined;
     }
-    this.edit = undefined;
     const t = p.text.trim();
     if (t !== "") {
       const i = this.recent.indexOf(t);
@@ -163,6 +192,14 @@ export class Normalizer {
     return [this.draft(ts, "turn.start", session, {}, { turn, agent })];
   }
 
+  /**
+   * Empieza una llamada al modelo. Los subagentes no tienen turn.start: su turno se conoce aquí, antes de las
+   * tools que pida esta llamada.
+   */
+  stepBegin(turn: string, agent: string | undefined): void {
+    this.current.set(agent ?? "", turn);
+  }
+
   step(ts: number, session: string, s: StepInfo): Draft[] {
     this.turnSteps.set(s.turn, (this.turnSteps.get(s.turn) ?? 0) + 1);
     this.current.set(s.agent ?? "", s.turn);
@@ -174,6 +211,8 @@ export class Normalizer {
     if (s.model !== undefined) data.model = s.model;
     if (s.effort !== undefined) data.effort = s.effort;
     if (s.stopReason !== undefined) data.stop_reason = s.stopReason;
+    // Sin motivo de parada la llamada se cortó (Esc): el agente solo cuenta lo que llegó a generar.
+    else data.partial = true;
     return [this.draft(ts, "turn.step", session, data, { turn: s.turn, agent: s.agent })];
   }
 
@@ -195,6 +234,8 @@ export class Normalizer {
     if (t.durationMs !== undefined) data.duration_ms = t.durationMs;
     if (t.answer !== undefined && t.answer !== "") data.answer = t.answer;
     this.turnSteps.delete(t.turn);
+    // Tools del turno que no llegaron a terminar (turno cortado): ya no van a cerrar.
+    for (const [id, p] of this.tools) if (p.turn === t.turn) this.tools.delete(id);
     if (this.current.get(t.agent ?? "") === t.turn) this.current.delete(t.agent ?? "");
     out.push(this.draft(ts, "turn.end", session, data, { turn: t.turn, agent: t.agent }));
     if (t.agent !== undefined) {
@@ -218,8 +259,11 @@ export class Normalizer {
     return [this.draft(ts, "tool.call", session, data, { turn, agent: c.agent })];
   }
 
-  /** Lo que decidió el agente sobre el permiso de una tool (antes de preguntar a nadie). */
-  toolCheck(ts: number, session: string, id: string, tool: string, decision: CheckDecision, reason?: string): Draft[] {
+  /**
+   * Lo que decidió el agente sobre el permiso de una tool (antes de preguntar a nadie). `checkMs`: cuánto tardó
+   * en decidir (normalmente nada; mucho si otro mod retuvo el permiso).
+   */
+  toolCheck(ts: number, session: string, id: string, tool: string, decision: CheckDecision, reason?: string, checkMs?: number): Draft[] {
     let p = this.tools.get(id);
     if (p === undefined) {
       p = { tool, agent: undefined, turn: undefined, callTs: ts };
@@ -229,9 +273,18 @@ export class Normalizer {
       p.askTs = ts;
       const data: Record<string, unknown> = { tool_use_id: id, tool };
       if (reason !== undefined && reason !== "") data.reason = reason;
+      if (checkMs !== undefined) data.check_ms = checkMs;
       return [this.draft(ts, "permission.request", session, data, { turn: p.turn, agent: p.agent })];
     }
-    return [this.decision(ts, session, id, p, decision, "policy")];
+    const d = this.decision(ts, session, id, p, decision, "policy");
+    if (checkMs !== undefined) d.data.check_ms = checkMs;
+    return [d];
+  }
+
+  /** El agente dice cuánto tardó la ejecución de la tool (llega antes que su resultado). */
+  toolExec(id: string, ms: number): void {
+    const p = this.tools.get(id);
+    if (p !== undefined && Number.isFinite(ms) && ms >= 0) p.execMs = ms;
   }
 
   /** Un aprobador remoto (canal de control) decidió un permiso preguntado. */
@@ -241,22 +294,28 @@ export class Normalizer {
     return [this.decision(ts, session, id, p, decision, "remote")];
   }
 
-  private decision(ts: number, session: string, id: string, p: PendingTool, decision: "allow" | "deny", by: string): Draft {
+  /** `exact` = false: el instante de la respuesta no se vio y `wait_ms` es una cota superior. */
+  private decision(ts: number, session: string, id: string, p: PendingTool, decision: "allow" | "deny", by: string, exact = true): Draft {
     p.decidedTs = ts;
     const wait = p.askTs === undefined ? 0 : Math.max(0, ts - p.askTs);
-    return this.draft(ts, "permission.decision", session, { tool_use_id: id, tool: p.tool, decision, by, wait_ms: wait }, { turn: p.turn, agent: p.agent });
+    return this.draft(ts, "permission.decision", session, { tool_use_id: id, tool: p.tool, decision, by, wait_ms: wait, exact }, { turn: p.turn, agent: p.agent });
   }
 
   toolResult(ts: number, session: string, r: ToolResultInfo): Draft[] {
     const out: Draft[] = [];
     const p = this.tools.get(r.toolUseId) ?? { tool: r.tool, agent: undefined, turn: undefined, callTs: ts };
-    // Preguntado y sin decisión registrada: la tool llegó a su fin, así que contestó el humano.
-    if (p.askTs !== undefined && p.decidedTs === undefined) out.push(this.decision(ts, session, r.toolUseId, p, r.rejected ? "deny" : "allow", "user"));
+    // Preguntado y sin decisión registrada: la tool llegó a su fin, así que contestó el humano. El instante de su
+    // respuesta es el fin menos lo que tardó la ejecución; si el agente no lo dice, el fin (cota superior).
+    if (p.askTs !== undefined && p.decidedTs === undefined) {
+      const exact = r.rejected || p.execMs !== undefined;
+      const at = r.rejected || p.execMs === undefined ? ts : Math.max(p.askTs, ts - p.execMs);
+      out.push(this.decision(at, session, r.toolUseId, p, r.rejected ? "deny" : "allow", "user", exact));
+    }
     const began = Math.max(p.callTs, p.decidedTs ?? p.callTs);
     out.push(this.draft(ts, "tool.result", session, {
       tool_use_id: r.toolUseId,
       tool: r.tool,
-      duration_ms: r.rejected ? 0 : Math.max(0, ts - began),
+      duration_ms: r.rejected ? 0 : p.execMs ?? Math.max(0, ts - began),
       ok: r.ok && !r.rejected,
       rejected: r.rejected,
       output_chars: r.outputChars,
@@ -265,13 +324,17 @@ export class Normalizer {
     return out;
   }
 
-  agentSpawn(ts: number, session: string, a: { agent: string; type?: string | undefined; description?: string | undefined; background?: boolean | undefined; model?: string | undefined; toolUseId?: string | undefined }): Draft[] {
+  agentSpawn(ts: number, session: string, a: { agent: string; type?: string | undefined; description?: string | undefined; background?: boolean | undefined; fork?: boolean | undefined; permissionMode?: string | undefined; model?: string | undefined; toolUseId?: string | undefined }): Draft[] {
     this.agents.set(a.agent, { spawnTs: ts, usage: ZERO_USAGE });
+    if (this.agents.size > MAX_AGENTS) this.agents.delete(this.agents.keys().next().value!);
     const data: Record<string, unknown> = { agent: a.agent, type: a.type ?? "agent", background: a.background === true };
+    if (a.fork !== undefined) data.fork = a.fork;
+    if (a.permissionMode !== undefined) data.permission_mode = a.permissionMode;
     if (a.description !== undefined) data.description = a.description;
     if (a.model !== undefined) data.model = a.model;
     if (a.toolUseId !== undefined) data.tool_use_id = a.toolUseId;
-    return [this.draft(ts, "agent.spawn", session, data, { agent: a.agent })];
+    // `turn`: el turno de la sesión principal que lanzó el subagente.
+    return [this.draft(ts, "agent.spawn", session, data, { agent: a.agent, turn: this.current.get("") })];
   }
 
   usage(ts: number, session: string, u: UsageSnapshot): Draft[] {
@@ -283,6 +346,8 @@ export class Normalizer {
   }
 
   command(ts: number, session: string, name: string): Draft[] {
+    // Lo tecleado era el comando, no el siguiente prompt.
+    this.edit = undefined;
     return [this.draft(ts, "command", session, { name })];
   }
 

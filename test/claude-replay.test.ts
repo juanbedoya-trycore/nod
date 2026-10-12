@@ -27,12 +27,19 @@ describe("sesión interactiva real (claude 2.1.296)", async () => {
     expect([...r.files.keys()]).toEqual([LOG]);
     expect(r.envelopes.length).toBeGreaterThan(0);
     for (const env of r.envelopes) expect(validate(env), JSON.stringify(validate.errors)).toBe(true);
-    expect(r.envelopes[0]!.source).toEqual({ instance: "mbp-personal", host: "claude", host_version: "2.1.296", machine: "mbp", profile: "personal", privacy: "completo" });
+    const src = r.envelopes[0]!.source;
+    expect(src).toMatchObject({ host: "claude", host_version: "2.1.296", machine: "mbp", profile: "personal", privacy: "completo" });
+    // La instancia no lleva el nombre de la máquina: perfil + id aleatorio guardado en el almacén.
+    expect(src.instance).toMatch(/^personal-[0-9a-f]{8}$/);
+    expect(src.instance).toBe(`personal-${String(r.store.get("nod.id"))}`);
+    expect(src.run).toMatch(/^[0-9a-f]{8}$/);
+    expect(new Set(r.envelopes.map((e) => e.source.run)).size).toBe(1);
     expect(r.logs.filter((l) => l.includes("falló"))).toEqual([]);
   });
 
-  it("seq crece estrictamente y todos los eventos son de la misma sesión", () => {
+  it("seq empieza en 1, crece de uno en uno y todos los eventos son de la misma sesión", () => {
     const seqs = evs.map((e) => e.seq);
+    expect(seqs).toEqual(seqs.map((_, i) => i + 1));
     for (let i = 1; i < seqs.length; i++) expect(seqs[i]).toBeGreaterThan(seqs[i - 1]!);
     expect(new Set(evs.map((e) => e.session))).toEqual(new Set(["6d4bbffb-b890-4286-a3a4-88446add6682"]));
   });
@@ -49,12 +56,14 @@ describe("sesión interactiva real (claude 2.1.296)", async () => {
     expect(asks.map((e) => e.data.tool)).toEqual(["Bash", "Bash"]);
     const user = ofType(evs, "permission.decision").filter((e) => e.data.by === "user");
     expect(user.map((e) => e.data.decision)).toEqual(["deny", "allow"]);
-    // Negado ~19,8 s después de preguntar; aprobado ~2 s después.
-    expect(Number(user[0]!.data.wait_ms)).toBeGreaterThan(15_000);
-    expect(Number(user[1]!.data.wait_ms)).toBeGreaterThan(1_000);
-    expect(Number(user[1]!.data.wait_ms)).toBeLessThan(5_000);
+    // Negado 19 786 ms después de preguntar. Aprobado: el fin de la tool (997 039) menos su ejecución (738 ms,
+    // del hook clásico PostToolUse) menos la pregunta (995 066) = 1 235 ms exactos, sin contar la ejecución.
+    expect(user[0]!.data).toMatchObject({ wait_ms: 19_786, exact: true });
+    expect(user[1]!.data).toMatchObject({ wait_ms: 1_235, exact: true });
     const results = ofType(evs, "tool.result").filter((e) => e.data.tool === "Bash");
-    expect(results.map((e) => [e.data.rejected, e.data.ok])).toEqual([[true, false], [false, true]]);
+    expect(results.map((e) => [e.data.rejected, e.data.ok, e.data.duration_ms])).toEqual([[true, false, 0], [false, true, 738]]);
+    // Antes de preguntar, otro mod retuvo el permiso 20 s: queda medido aparte.
+    expect(ofType(evs, "permission.request").map((e) => Math.round(Number(e.data.check_ms) / 1000))).toEqual([20, 20]);
   });
 
   it("lo que el agente dejó pasar solo cuenta como policy", () => {
@@ -73,6 +82,8 @@ describe("sesión interactiva real (claude 2.1.296)", async () => {
     // El sexto lo mete el propio agente al acabar el subagente en segundo plano: no es del humano.
     expect(all.map((p) => p.data.origin)).toEqual(["composer", "composer", "composer", "composer", "composer", "task-notification"]);
     const prompts = all.filter((p) => p.data.origin === "composer");
+    // Lo tecleado para /exit no se cuela en el prompt que mete el agente.
+    expect(all.at(-1)!.data.edit).toBeUndefined();
     const recalled = prompts.filter((p) => (p.data.edit as any)?.recalled === true);
     expect(recalled.map((p) => p.data.text)).toEqual(["Escribe un ensayo de 2000 palabras sobre la historia de los relojes, sin usar herramientas. Mejor solo 2 frases."]);
   });
@@ -86,11 +97,18 @@ describe("sesión interactiva real (claude 2.1.296)", async () => {
     expect((end!.data.usage as any).output).toBeGreaterThan(0);
     const read = ofType(evs, "tool.call").find((e) => e.data.tool === "Read")!;
     expect(read.agent).toBe("aa0bd0fdb436e3ef4");
+    // Su turno se conoce desde el inicio del paso, antes de la tool.
+    expect(read.turn).toBe("86375910-afde-4629-a83a-269bc215c6a2");
+    expect(spawn!.turn).toBe("daad7bae-321c-458f-9438-ea1f1deca566");
+    expect(spawn!.data).toMatchObject({ fork: false });
   });
 
   it("cada fin de turno principal trae contexto, límites de 5 h y 7 días y costo", () => {
     const u = ofType(evs, "usage");
     expect(u.length).toBeGreaterThan(0);
+    // Cada snapshot es el de su momento: el contexto crece a lo largo de la sesión.
+    const tokens = u.map((x) => (x.data.context as { tokens: number }).tokens);
+    expect(new Set(tokens).size).toBeGreaterThan(1);
     expect(u.at(-1)!.data).toMatchObject({
       context: { window: 1_000_000 },
       limits: [{ kind: "five_hour", percent_used: 7 }, { kind: "seven_day", percent_used: 1 }],
@@ -154,7 +172,7 @@ describe("destino HTTP", () => {
 
   it("si el destino no contesta, nada se pierde: queda en la cola persistente", async () => {
     const r = await replay(FIXTURE, { env: { NOD_SINKS: "http://127.0.0.1:8787" }, httpStatus: 503 });
-    const saved = [...r.store.entries()].find(([k]) => k.startsWith("nod.outbox."));
+    const saved = [...r.store.entries()].find(([k]) => k.startsWith("nod.outbox.") && !k.endsWith(".runs"));
     expect(saved).toBeDefined();
     const items = (saved![1] as { items: unknown[] }).items;
     expect(items.length).toBeGreaterThan(50);

@@ -6,9 +6,9 @@ import type { Draft } from "../src/core/events.js";
 const HOME = { HOME: "/Users/dev" };
 
 describe("resolveConfig", () => {
-  it("sin nada: fichero local, privacidad completo, instancia máquina-perfil", () => {
-    const { config, warnings } = resolveConfig(HOME, undefined, "personal", "MBP de Juan");
-    expect(config).toMatchObject({ enabled: true, privacy: "completo", instance: "mbp-de-juan-personal", source: "valores por defecto" });
+  it("sin nada: fichero local, privacidad completo, instancia perfil-id (sin el nombre de la máquina)", () => {
+    const { config, warnings } = resolveConfig(HOME, undefined, "personal", "3fa9c2d1");
+    expect(config).toMatchObject({ enabled: true, privacy: "completo", instance: "personal-3fa9c2d1", source: "valores por defecto" });
     expect(config.sinks).toEqual([{ kind: "file", target: "/Users/dev/.local/state/nod/events.jsonl" }]);
     expect(warnings).toEqual([]);
   });
@@ -26,16 +26,26 @@ describe("resolveConfig", () => {
     expect(env.sinks).toEqual([{ kind: "file", target: "/Users/dev/x.jsonl" }, { kind: "http", target: "https://c.example", token: undefined }]);
   });
 
-  it("NOD_TOKEN vale para los http sin token propio", () => {
-    const file = JSON.stringify({ sinks: [{ url: "http://a:1" }, { url: "http://b:1", token: "propio" }] });
-    const { config } = resolveConfig({ ...HOME, NOD_TOKEN: "comun" }, file, "p", "m");
-    expect(config.sinks.map((s) => s.token)).toEqual(["comun", "propio"]);
+  it("NOD_TOKEN: solo para los destinos de NOD_SINKS, y nunca por http en claro fuera de la máquina", () => {
+    const { config, warnings } = resolveConfig({ ...HOME, NOD_TOKEN: "comun", NOD_SINKS: "https://a.example http://b.example http://127.0.0.1:9" }, undefined, "p", "m");
+    expect(config.sinks.map((s) => s.token)).toEqual(["comun", undefined, "comun"]);
+    expect(warnings.join()).toContain("NOD_TOKEN no se manda a http://b.example");
+    // Los destinos del fichero no heredan el token del entorno.
+    const file = JSON.stringify({ sinks: [{ url: "https://tercero.example" }, { url: "https://b:1", token: "propio" }] });
+    expect(resolveConfig({ ...HOME, NOD_TOKEN: "comun" }, file, "p", "m").config.sinks.map((s) => s.token)).toEqual([undefined, "propio"]);
+  });
+
+  it("una URL con credenciales o parámetros se rechaza sin repetirlos", () => {
+    const { config, warnings } = resolveConfig({ ...HOME, NOD_SINKS: "https://user:S3cr3t@c.example/?token=abc" }, undefined, "p", "m");
+    expect(config.sinks).toEqual([]);
+    expect(warnings.join()).not.toMatch(/S3cr3t|abc/);
+    expect(warnings.join()).toContain("https://c.example ignorado");
   });
 
   it("valores inválidos: avisa y sigue con lo válido", () => {
     const { config, warnings } = resolveConfig({ ...HOME, NOD_PRIVACY: "total", NOD_INSTANCE: "Mi Mac", NOD_SINKS: "relativo.jsonl" }, "{no json", "p", "m");
     expect(config.privacy).toBe("completo");
-    expect(config.instance).toBe("m-p");
+    expect(config.instance).toBe("p-m");
     expect(config.sinks).toEqual([]);
     expect(warnings.join("\n")).toMatch(/JSON inválido[\s\S]*destino inválido[\s\S]*privacidad "total"[\s\S]*instancia "Mi Mac"/);
   });
@@ -50,8 +60,8 @@ describe("resolveConfig", () => {
   });
 
   it("defaultInstance limpia y acota", () => {
-    expect(defaultInstance(undefined, ".claude")).toBe("local-claude");
-    expect(defaultInstance("a".repeat(80), "p")).toHaveLength(64);
+    expect(defaultInstance(".claude", "3fa9c2d1")).toBe("claude-3fa9c2d1");
+    expect(defaultInstance("a".repeat(80), "3fa9c2d1")).toHaveLength(64);
   });
 });
 
@@ -78,5 +88,20 @@ describe("privacidad", () => {
     expect(sinkAllowed("trabajo", { kind: "http", target: "http://[::1]:9" })).toBe(true);
     expect(sinkAllowed("trabajo", { kind: "http", target: "https://collector.example" })).toBe(false);
     expect(sinkAllowed("redactado", { kind: "http", target: "https://collector.example" })).toBe(true);
+  });
+});
+
+describe("redactado: identificadores con hash", () => {
+  it("tarea, comandos y subagentes propios y servidores MCP; trabajo los deja legibles", () => {
+    const base = { ts: 0, session: "s", task: "ACME-PAYROLL-77" };
+    const red = (type: string, data: Record<string, unknown>) => applyPrivacy({ ...base, type: type as never, data }, "redactado");
+    expect(red("turn.start", {}).task).toMatch(/^h-[0-9a-f]{8}$/);
+    expect(red("command", { name: "acme-release" }).data.name).toMatch(/^h-/);
+    expect(red("command", { name: "compact" }).data.name).toBe("compact");
+    expect(red("agent.spawn", { type: "acme-auditor", agent: "a" }).data.type).toMatch(/^h-/);
+    expect(red("agent.spawn", { type: "Explore", agent: "a" }).data.type).toBe("Explore");
+    expect(red("tool.call", { tool: "mcp__acme-jira__search" }).data.tool).toMatch(/^mcp__h-[0-9a-f]{8}__search$/);
+    expect(red("turn.step", { tools: ["Read", "mcp__acme-jira__search"] }).data.tools).toEqual(["Read", expect.stringMatching(/^mcp__h-/)]);
+    expect(applyPrivacy({ ...base, type: "turn.start", data: {} }, "trabajo").task).toBe("ACME-PAYROLL-77");
   });
 });

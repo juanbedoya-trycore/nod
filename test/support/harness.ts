@@ -69,9 +69,16 @@ export async function replay(fixture: string, opts: ReplayOptions = {}): Promise
   register(on as never);
 
   const rows = loadRows(fixture);
+  // Las llamadas a `$` se contestan con lo que devolvió el motor en ese momento de la sesión (el último valor
+  // grabado hasta `now`), no con el final: así un snapshot leído a destiempo se nota.
   const lastValue = (name: string) => {
-    for (let i = rows.length - 1; i >= 0; i--) if (rows[i]!.event === name && rows[i]!.phase === "out") return rows[i]!.data?.value;
-    return undefined;
+    let found: unknown;
+    for (const r of rows) {
+      if (r.ts > now) break;
+      if (r.event === name && r.phase === "out") found = r.data?.value;
+    }
+    if (found !== undefined) return found;
+    return rows.find((r) => r.event === name && r.phase === "out")?.data?.value;
   };
   const env: Record<string, string> = { HOME: "/Users/dev", CLAUDE_CONFIG_DIR: "/Users/dev/.local/state/ws/claude/personal", ...opts.env };
   const files = new Map<string, string>();

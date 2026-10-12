@@ -15,6 +15,8 @@ export interface Usage {
 
 export interface Source {
   instance: string;
+  /** Ejecución (proceso) del agente que emitió: `seq` es único y creciente dentro de ella. */
+  run: string;
   host: string;
   host_version?: string;
   machine?: string;

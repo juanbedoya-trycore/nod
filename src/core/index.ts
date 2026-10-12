@@ -3,7 +3,6 @@ export * from "./config.js";
 export * from "./normalize.js";
 export * from "./privacy.js";
 export * from "./queue.js";
-export * from "./counter.js";
 export * from "./outbox.js";
 export * from "./platform.js";
 export * from "./engine.js";

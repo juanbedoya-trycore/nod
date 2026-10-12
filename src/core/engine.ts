@@ -3,21 +3,20 @@
 // con su Platform. Los métodos públicos nunca lanzan: un fallo de Nod no puede romper la sesión.
 import { resolveConfig, configPath } from "./config.js";
 import type { Config } from "./config.js";
-import { Counter } from "./counter.js";
-import type { CounterState } from "./counter.js";
 import { PRIVACY_LEVELS } from "./events.js";
 import type { Draft, NodEvent, Privacy, Source, Usage } from "./events.js";
 import { Normalizer } from "./normalize.js";
 import type { CheckDecision, PromptEdit, SessionInfo, StepInfo, ToolCallInfo, ToolResultInfo, TurnEndInfo, UsageSnapshot } from "./normalize.js";
 import { Outbox } from "./outbox.js";
 import type { Transport } from "./outbox.js";
-import { applyPrivacy, sinkAllowed } from "./privacy.js";
+import { applyPrivacy, isStricter, sinkAllowed, stricter } from "./privacy.js";
 import type { HostInfo, Platform, Timer } from "./platform.js";
 
 export const COMMAND_DESCRIPTION = "Nod: estado de la sesión y de los destinos; /nod tarea <id>, /nod privacidad, /nod pausa, /nod reanuda";
 
 const KEYS = {
-  counter: (instance: string) => `nod.seq.${instance}`,
+  /** Id aleatorio y estable de este perfil en esta máquina: la instancia por defecto sin el nombre del equipo. */
+  anonId: "nod.id",
   paused: "nod.paused",
   privacy: "nod.privacy",
 } as const;
@@ -34,7 +33,6 @@ interface Runtime {
   config: Config;
   warnings: string[];
   privacy: Privacy;
-  counter: Counter;
   outboxes: Outbox[];
   paused: boolean;
 }
@@ -65,12 +63,20 @@ export class NodEngine {
   private timer: Timer | undefined;
   private stats = freshStats();
   private session: string | undefined;
+  /** Todo el trabajo va en fila: el adaptador no espera (no retrasa al agente) y el orden se conserva. */
+  private chain: Promise<void> = Promise.resolve();
+  /** Esta ejecución del agente (un proceso): `seq` empieza en 1 y es único dentro de ella (Nod v1 §1.3). */
+  readonly run = randomHex(4);
+  private seq = 0;
+  /** Desde cuándo esta sesión (para emitir un session.start cuando el agente cambia de sesión sin avisar). */
+  private started = new Set<string>();
 
   // ---------- lo que llama el adaptador ----------
 
   async sessionStart(p: Platform, session: string, info: SessionInfo): Promise<void> {
     await this.guard(p, "session.start", async (now, rt) => {
       this.session = session;
+      this.started.add(session);
       this.stats = freshStats();
       const out = this.norm.sessionStart(now, session, info);
       if (rt.config.task !== undefined && this.norm.task === undefined) out.push(...this.norm.setTask(now, session, rt.config.task, undefined, "env"));
@@ -113,8 +119,24 @@ export class NodEngine {
     await this.guard(p, "tool.call", async (now) => this.norm.toolCall(now, session, c));
   }
 
-  async toolCheck(p: Platform, session: string, id: string, tool: string, decision: CheckDecision, reason?: string): Promise<void> {
-    await this.guard(p, "tool.check", async (now) => this.norm.toolCheck(now, session, id, tool, decision, reason));
+  async toolCheck(p: Platform, session: string, id: string, tool: string, decision: CheckDecision, reason?: string, checkMs?: number): Promise<void> {
+    await this.guard(p, "tool.check", async (now) => this.norm.toolCheck(now, session, id, tool, decision, reason, checkMs));
+  }
+
+  /** Duración de la ejecución de una tool, si el agente la da (antes de su resultado). */
+  async toolExec(p: Platform, id: string, ms: number): Promise<void> {
+    await this.guard(p, "tool.exec", async () => {
+      this.norm.toolExec(id, ms);
+      return [];
+    });
+  }
+
+  /** Empieza una llamada al modelo (fija el turno en curso del subagente antes de sus tools). */
+  async stepBegin(p: Platform, turn: string, agent?: string): Promise<void> {
+    await this.guard(p, "turn.step", async () => {
+      this.norm.stepBegin(turn, agent);
+      return [];
+    });
   }
 
   async toolResult(p: Platform, session: string, r: ToolResultInfo): Promise<void> {
@@ -131,14 +153,19 @@ export class NodEngine {
 
   async sessionEnd(p: Platform, session: string, reason: string): Promise<void> {
     await this.guard(p, "session.end", async (now) => this.norm.sessionEnd(now, session, reason));
-    // Al cerrar se intenta entregar todo ya: lo que no salga queda en la cola para la siguiente sesión.
+    this.started.delete(session);
+    // Al cerrar se intenta entregar todo ya, con un plazo: lo que no salga queda guardado para la siguiente sesión.
     const rt = await this.runtime?.catch(() => undefined);
-    if (rt !== undefined && !rt.paused) await Promise.all(rt.outboxes.map((o) => o.flush()));
+    if (rt === undefined) return;
+    const boxes = rt.outboxes.filter((o) => sinkAllowed(rt.privacy, o.sink));
+    if (!rt.paused) await within(p, CLOSE_TIMEOUT_MS, Promise.all(boxes.map((o) => o.flush())));
+    await Promise.all(boxes.map((o) => o.persistSoon(Number.MAX_SAFE_INTEGER)));
   }
 
-  /** `/nod …`. Nunca lanza. */
+  /** `/nod …`. Espera a que la fila esté al día (las cifras incluyen todo lo anterior). Nunca lanza. */
   async runCommand(p: Platform, session: string, args: string): Promise<string> {
     try {
+      await this.chain;
       return await this.doCommand(p, session, args.trim());
     } catch (err) {
       return `nod: error (${String(err)})`;
@@ -166,12 +193,21 @@ export class NodEngine {
         text = undefined; // sin fichero: valores por defecto
       }
     }
-    const { config, warnings } = resolveConfig(env, text, info.profile, info.machine);
-    for (const w of warnings) p.log(`nod: ${w}`);
+    let anonId = await p.store.get(KEYS.anonId);
+    if (typeof anonId !== "string" || !/^[0-9a-f]{8}$/.test(anonId)) {
+      anonId = randomHex(4);
+      await p.store.set(KEYS.anonId, anonId);
+    }
+    const { config, warnings } = resolveConfig(env, text, info.profile, anonId as string);
+    // /nod privacidad solo puede endurecer lo que fija la configuración, nunca relajarlo.
     const stored = await p.store.get(KEYS.privacy);
-    const privacy = env.NOD_PRIVACY ? config.privacy : (PRIVACY_LEVELS as readonly unknown[]).includes(stored) ? (stored as Privacy) : config.privacy;
-    const counter = new Counter(config.instance, (await p.store.get(KEYS.counter(config.instance))) as CounterState | undefined, await p.now());
-    const rt: Runtime = { info, config, warnings, privacy, counter, outboxes: [], paused: (await p.store.get(KEYS.paused)) === true };
+    let privacy = config.privacy;
+    if (!env.NOD_PRIVACY && (PRIVACY_LEVELS as readonly unknown[]).includes(stored)) {
+      privacy = stricter(config.privacy, stored as Privacy);
+      if (isStricter(config.privacy, stored as Privacy)) warnings.push(`la privacidad guardada (${String(stored)}) es más laxa que la de la configuración: uso ${config.privacy}`);
+    }
+    for (const w of warnings) p.log(`nod: ${w}`);
+    const rt: Runtime = { info, config, warnings, privacy, outboxes: [], paused: (await p.store.get(KEYS.paused)) === true };
     for (const sink of config.sinks) {
       const transport: Transport = sink.kind === "file"
         ? async (envelope) => {
@@ -181,18 +217,30 @@ export class NodEngine {
         : async (envelope) => {
             const headers: Record<string, string> = { "content-type": "application/json" };
             if (sink.token) headers.authorization = `Bearer ${sink.token}`;
-            const r = await p.fetch(`${sink.target}/v1/events`, { method: "POST", headers, body: JSON.stringify(envelope) });
+            // Un destino que acepta la conexión y no contesta no puede dejar la entrega colgada.
+            const r = await within(p, HTTP_TIMEOUT_MS, p.fetch(`${sink.target}/v1/events`, { method: "POST", headers, body: JSON.stringify(envelope) }));
+            if (r === undefined) throw new Error(`sin respuesta en ${HTTP_TIMEOUT_MS / 1000} s`);
             return { status: r.status, text: r.text };
           };
-      const box = new Outbox(sink, (pv) => this.source(rt, pv), transport, this.outboxIo(p), config.instance);
+      const box = new Outbox(sink, (pv, run) => this.source(rt, pv, run), transport, this.outboxIo(p), config.instance, this.run);
       await box.init();
       rt.outboxes.push(box);
     }
+    // Lo que quedó en cola de una sesión anterior se ajusta al perfil de ahora antes de entregar nada.
+    await this.restrictQueues(p, rt);
     return rt;
   }
 
-  private source(rt: Runtime, privacy: Privacy): Source {
-    const s: Source = { instance: rt.config.instance, host: rt.info.host, profile: rt.info.profile, privacy };
+  /** Vuelve a filtrar las colas con la privacidad actual; vacía las de destinos que ya no la admiten. */
+  private async restrictQueues(p: Platform, rt: Runtime): Promise<void> {
+    for (const box of rt.outboxes) {
+      const removed = await box.restrict(rt.privacy, sinkAllowed(rt.privacy, box.sink));
+      if (removed > 0) p.log(`nod: ${removed} eventos en cola hacia ${box.sink.target} descartados (privacidad ${rt.privacy})`);
+    }
+  }
+
+  private source(rt: Runtime, privacy: Privacy, run: string): Source {
+    const s: Source = { instance: rt.config.instance, run, host: rt.info.host, profile: rt.info.profile, privacy };
     if (rt.info.hostVersion !== undefined) s.host_version = rt.info.hostVersion;
     if (rt.info.machine !== undefined && privacy === "completo") s.machine = rt.info.machine;
     return s;
@@ -209,38 +257,55 @@ export class NodEngine {
 
   // ---------- emisión ----------
 
-  /** Normaliza (`work`), numera, filtra y encola. Nunca lanza. */
-  private async guard(p: Platform, label: string, work: (now: number, rt: Runtime) => Promise<Draft[]>): Promise<void> {
-    try {
-      const rt = await this.getRuntime(p);
-      if (!rt.config.enabled) return;
-      const now = await p.now();
-      const drafts = await work(now, rt);
-      if (drafts.length > 0) await this.emit(p, rt, drafts, now);
-    } catch (err) {
-      p.log(`nod: ${label} falló (${String(err)})`);
-    }
+  /**
+   * Normaliza (`work`), numera, filtra y encola, en fila detrás de lo anterior. La hora se toma al llamar (es la
+   * del evento, no la de su turno en la fila). Nunca lanza.
+   */
+  private guard(p: Platform, label: string, work: (now: number, rt: Runtime) => Promise<Draft[]>): Promise<void> {
+    const at = p.now();
+    at.catch(() => undefined);
+    const run = this.chain.then(async () => {
+      try {
+        const rt = await this.getRuntime(p);
+        if (!rt.config.enabled) return;
+        const now = await at;
+        const drafts = await work(now, rt);
+        // El agente cambió de sesión sin session.start (p. ej. /clear): se abre la nueva antes de sus eventos.
+        const first = drafts[0];
+        if (first !== undefined && first.type !== "session.start" && !this.started.has(first.session)) {
+          this.started.add(first.session);
+          this.session = first.session;
+          this.stats = freshStats();
+          this.norm.resetSession();
+          const opening = this.norm.sessionStart(now, first.session, {});
+          opening[0]!.data.continued = true;
+          drafts.unshift(...opening);
+        }
+        if (drafts.length > 0) await this.emit(p, rt, drafts, now);
+      } catch (err) {
+        p.log(`nod: ${label} falló (${String(err)})`);
+      }
+    });
+    this.chain = run;
+    return run;
   }
 
   private async emit(p: Platform, rt: Runtime, drafts: Draft[], now: number): Promise<void> {
     let urgent = false;
     for (const d of drafts) {
       this.count(d);
-      const e: NodEvent = { ...applyPrivacy(d, rt.privacy), seq: rt.counter.next() };
-      for (const box of rt.outboxes) if (sinkAllowed(rt.privacy, box.sink)) box.push({ e, p: rt.privacy }, now);
+      const e: NodEvent = { ...applyPrivacy(d, rt.privacy), seq: ++this.seq };
+      for (const box of rt.outboxes) if (sinkAllowed(rt.privacy, box.sink)) box.push({ e, p: rt.privacy, r: this.run }, now);
       if (URGENT.has(d.type)) urgent = true;
     }
-    if (rt.counter.dirty) {
-      await p.store.set(KEYS.counter(rt.config.instance), rt.counter.snapshot());
-      rt.counter.markSaved();
-    }
     if (urgent) for (const box of rt.outboxes) box.urgent();
+    for (const box of rt.outboxes) await box.persistSoon(now);
     await this.schedule(p, rt);
   }
 
   private async schedule(p: Platform, rt: Runtime): Promise<void> {
     const now = await p.now();
-    const waits = rt.outboxes.map((o) => o.delay(now, rt.paused)).filter((w): w is number => w !== null);
+    const waits = rt.outboxes.filter((o) => sinkAllowed(rt.privacy, o.sink)).map((o) => o.delay(now, rt.paused)).filter((w): w is number => w !== null);
     this.timer?.cancel();
     this.timer = undefined;
     if (waits.length === 0) return;
@@ -254,6 +319,7 @@ export class NodEngine {
     try {
       const now = await p.now();
       for (const box of rt.outboxes) {
+        if (!sinkAllowed(rt.privacy, box.sink)) continue;
         box.io = this.outboxIo(p);
         if (box.delay(now, rt.paused) === 0) await box.flush();
       }
@@ -322,18 +388,19 @@ export class NodEngine {
       if (want === undefined) return `privacidad en este perfil: ${rt.privacy}\n  ${PRIVACY_HELP}`;
       if (!(PRIVACY_LEVELS as readonly string[]).includes(want)) return `privacidad "${want}" no existe.\n  ${PRIVACY_HELP}`;
       if ((await p.env()).NOD_PRIVACY) return `NOD_PRIVACY=${rt.privacy} manda en este entorno: quítala para elegir con /nod privacidad.`;
+      if (isStricter(rt.config.privacy, want as Privacy)) return `la configuración (${rt.config.source}) fija ${rt.config.privacy} en este perfil: /nod privacidad solo puede endurecerla.`;
       rt.privacy = want as Privacy;
       await p.store.set(KEYS.privacy, rt.privacy);
+      await this.restrictQueues(p, rt);
       const blocked = rt.outboxes.filter((o) => !sinkAllowed(rt.privacy, o.sink)).map((o) => o.sink.target);
       return `privacidad en este perfil: ${rt.privacy}` + (blocked.length > 0 ? `\n  no se entregará a (no son locales): ${blocked.join(", ")}` : "");
     }
     if (v === "tarea" || v === "task") {
-      const now = await p.now();
       if (rest.length === 0) return this.norm.task === undefined ? "sin tarea: /nod tarea <id> [título]" : `tarea: ${this.norm.task}`;
       const clear = rest.length === 1 && /^(fin|ninguna|none|clear|-)$/i.test(rest[0]!);
       const id = clear ? undefined : rest[0]!;
       const title = clear || rest.length < 2 ? undefined : rest.slice(1).join(" ");
-      if (rt.config.enabled) await this.emit(p, rt, this.norm.setTask(now, this.session ?? session, id, title, "command"), now);
+      if (rt.config.enabled) await this.guard(p, "task.set", async (at) => this.norm.setTask(at, this.session ?? session, id, title, "command"));
       else this.norm.task = id;
       return id === undefined ? "tarea cerrada: lo que sigue no se asocia a ninguna" : `tarea: ${id}${title ? ` (${title})` : ""}. Todo lo que siga en esta sesión cuenta para ella.`;
     }
@@ -382,6 +449,33 @@ function renews(at: string | undefined, now: number): string {
   const m = min % 60;
   const parts = d > 0 ? [`${d} d`, `${h} h`] : h > 0 ? [`${h} h`, `${m} min`] : [`${m} min`];
   return ` (se renueva en ${parts.join(" ")})`;
+}
+
+const HTTP_TIMEOUT_MS = 10_000;
+const CLOSE_TIMEOUT_MS = 3_000;
+
+/** La promesa, o undefined si no se resuelve en `ms` (con el reloj del agente). */
+function within<T>(p: Platform, ms: number, work: Promise<T>): Promise<T | undefined> {
+  return new Promise((resolve, reject) => {
+    const timer = p.after(ms, () => resolve(undefined));
+    work.then(
+      (v) => {
+        timer.cancel();
+        resolve(v);
+      },
+      (err) => {
+        timer.cancel();
+        reject(err);
+      },
+    );
+  });
+}
+
+/** n bytes aleatorios en hexadecimal (no es criptográfico: solo separa instancias). */
+function randomHex(n: number): string {
+  const c = (globalThis as { crypto?: { getRandomValues?: (a: Uint8Array) => Uint8Array } }).crypto;
+  const bytes = c?.getRandomValues ? c.getRandomValues(new Uint8Array(n)) : Uint8Array.from({ length: n }, () => Math.floor(Math.random() * 256));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 const PRIVACY_HELP = "completo: todo (texto, comandos, rutas) · redactado: sin texto ni rutas · trabajo: redactado y solo destinos locales";

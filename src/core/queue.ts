@@ -57,20 +57,51 @@ export class OfflineQueue<T> {
     return this.entries.slice(0, max).map((e) => e.item);
   }
 
-  /** Quita los primeros `count` (entregados). */
-  ack(count: number): void {
-    const gone = this.entries.splice(0, count);
-    for (const e of gone) this.bytes -= e.size;
-    if (gone.length > 0) this.version++;
+  /**
+   * Quita estos elementos (los entregados), por identidad: si mientras se enviaban la cola descartó cabeza o se
+   * reescribió, no se lleva otros por posición.
+   */
+  ackItems(items: readonly T[]): void {
+    if (items.length === 0) return;
+    const gone = new Set<T>(items);
+    const before = this.entries.length;
+    this.entries = this.entries.filter((e) => {
+      if (!gone.has(e.item)) return true;
+      this.bytes -= e.size;
+      return false;
+    });
+    if (this.entries.length !== before) this.version++;
   }
 
-  /** Quita los primeros `count` por rechazo definitivo, contándolos como perdidos. */
-  reject(count: number): number {
+  /** Quita estos elementos por rechazo definitivo, contándolos como perdidos. */
+  rejectItems(items: readonly T[]): number {
     const before = this.entries.length;
-    this.ack(count);
+    this.ackItems(items);
     const lost = before - this.entries.length;
     this.droppedTotal += lost;
     return lost;
+  }
+
+  /** Reescribe o quita (undefined) cada elemento; devuelve cuántos quitó. Sirve para endurecer la privacidad. */
+  rewrite(fn: (item: T) => T | undefined): number {
+    const kept: Entry<T>[] = [];
+    let removed = 0;
+    let changed = false;
+    for (const e of this.entries) {
+      const next = fn(e.item);
+      if (next === undefined) {
+        removed++;
+        continue;
+      }
+      if (next !== e.item) changed = true;
+      kept.push(next === e.item ? e : { item: next, size: JSON.stringify(next).length });
+    }
+    if (removed > 0 || changed) {
+      this.entries = kept;
+      this.bytes = kept.reduce((n, e) => n + e.size, 0);
+      this.version++;
+    }
+    return removed;
   }
 
   toJSON(): QueueSnapshot<T> {

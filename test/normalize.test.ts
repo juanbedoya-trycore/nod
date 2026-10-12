@@ -115,3 +115,50 @@ describe("tareas y turnos", () => {
     expect(new Normalizer().usage(0, S, {})).toEqual([]);
   });
 });
+
+describe("fidelidad", () => {
+  it("verbOf no deja salir trozos de secretos ni scripts propios", () => {
+    expect(verbOf("PGPASSWORD='hunter2 s3cr3t' psql")).toBeUndefined();
+    expect(verbOf("/Users/jperez/clientes/acme/deploy-acme.sh prod")).toBeUndefined();
+    expect(verbOf("(cd /x && make)")).toBeUndefined();
+    expect(verbOf("$(echo rm) -rf")).toBeUndefined();
+    expect(verbOf("npm run build")).toBe("npm");
+  });
+
+  it("lo tecleado para un comando no se cuela en el siguiente prompt; los prompts del agente no consumen la edición", () => {
+    const n = new Normalizer();
+    n.promptEdit(0, { before: "", start: 0, end: 0, inserted: "/exit" });
+    n.command(10, S, "exit");
+    expect(n.promptSubmit(20, S, { text: "aviso", origin: "task-notification" })[0]!.data.edit).toBeUndefined();
+    n.promptEdit(30, { before: "", start: 0, end: 0, inserted: "hola" });
+    expect(n.promptSubmit(40, S, { text: "aviso", origin: "task-notification" })[0]!.data.edit).toBeUndefined();
+    expect(n.promptSubmit(50, S, { text: "hola", origin: "composer" })[0]!.data.edit).toMatchObject({ events: 1, typing_ms: 20 });
+  });
+
+  it("aprobado sin duración de ejecución: wait_ms es cota superior (exact: false)", () => {
+    const n = new Normalizer();
+    n.toolCall(0, S, { toolUseId: "t", tool: "Bash" });
+    n.toolCheck(10, S, "t", "Bash", "ask");
+    const [d] = n.toolResult(5010, S, { toolUseId: "t", tool: "Bash", ok: true, rejected: false, outputChars: 0 });
+    expect(d!.data).toMatchObject({ wait_ms: 5000, exact: false });
+  });
+
+  it("aprobado con duración de ejecución: la espera excluye la ejecución", () => {
+    const n = new Normalizer();
+    n.toolCall(0, S, { toolUseId: "t", tool: "Bash" });
+    n.toolCheck(10, S, "t", "Bash", "ask");
+    n.toolExec("t", 300_000);
+    const out = n.toolResult(302_010, S, { toolUseId: "t", tool: "Bash", ok: true, rejected: false, outputChars: 0 });
+    expect(out[0]!.data).toMatchObject({ wait_ms: 2_000, exact: true });
+    expect(out[0]!.ts).toBe(2_010);
+    expect(out[1]!.data.duration_ms).toBe(300_000);
+  });
+
+  it("un permiso de subagente abandonado se cierra con su turno", () => {
+    const n = new Normalizer();
+    n.stepBegin("sub", "a1");
+    n.toolCall(1, S, { toolUseId: "t", tool: "Edit", agent: "a1" });
+    n.toolCheck(2, S, "t", "Edit", "ask");
+    expect(n.turnEnd(10, S, { turn: "sub", agent: "a1", outcome: "aborted" }).map((e) => [e.type, e.data.decision])).toEqual([["permission.decision", "deny"], ["turn.end", undefined]]);
+  });
+});

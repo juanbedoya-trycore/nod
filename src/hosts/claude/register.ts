@@ -24,8 +24,11 @@ let info: Promise<HostInfo> | undefined;
 let sessionId: string | undefined;
 const madeDirs = new Set<string>();
 
-/** Lo que Claude Code devuelve al modelo cuando el humano niega un permiso. */
-const REJECTED_RE = /doesn't want to proceed with this tool use|tool use was rejected/i;
+/**
+ * Lo que Claude Code devuelve al modelo cuando el humano niega un permiso (con `isError`). Anclado al principio:
+ * una tool que imprima esta frase (un grep, un cat de este fichero) no es un rechazo.
+ */
+const REJECTED_RE = /^(Error: )?The user doesn't want to proceed with this tool use/;
 
 async function readEnv($: Engine): Promise<NodEnv> {
   return {
@@ -151,7 +154,7 @@ export function register(on: On, _options?: unknown): void {
   on("command.run", { command: "nod" }, async ($, e) => ({ text: await nod.runCommand(platform($), await currentSession($), String(e.args ?? "")) }));
 
   on("command.run", async ($, e, next) => {
-    if (typeof e?.command === "string" && e.command !== "nod") await nod.command(platform($), await currentSession($), e.command);
+    if (typeof e?.command === "string" && e.command !== "nod") void nod.command(platform($), await currentSession($), e.command);
     return next(e);
   }).catch((_$, e, next) => next(e));
 
@@ -166,7 +169,9 @@ export function register(on: On, _options?: unknown): void {
   }).catch((_$, e, next) => next(e));
 
   on("prompt.submit", async ($, e, next) => {
-    await nod.promptSubmit(platform($), await currentSession($), String(e?.text ?? ""), opt(e?.origin?.kind) ?? "unknown");
+    // Los hooks que bloquean al agente (prompt.submit, tool.call, tool.check…) no esperan a Nod: el trabajo va en
+    // la fila del motor, en orden.
+    void nod.promptSubmit(platform($), await currentSession($), String(e?.text ?? ""), opt(e?.origin?.kind) ?? "unknown");
     return next(e);
   }).catch((_$, e, next) => next(e));
 
@@ -177,6 +182,7 @@ export function register(on: On, _options?: unknown): void {
 
   // turn.step va en streaming: el hook es un generador que deja pasar los fragmentos y lee el resultado final.
   on("turn.step", async function* ($: Engine, e: any, next: any) {
+    if (typeof e?.turnId === "string") void nod.stepBegin(platform($), e.turnId, opt(e.agentId));
     const out = yield* next(e);
     if (typeof e?.turnId === "string") {
       await nod.step(platform($), await currentSession($), {
@@ -214,35 +220,47 @@ export function register(on: On, _options?: unknown): void {
     const session = await currentSession($);
     const id = opt(e?.tool_use_id);
     const tool = String(e?.tool ?? "?");
-    if (id !== undefined) await nod.toolCall(platform($), session, { toolUseId: id, tool, input: toolInput(e), agent: opt(e.agentId) });
+    if (id !== undefined) void nod.toolCall(platform($), session, { toolUseId: id, tool, input: toolInput(e), agent: opt(e.agentId) });
     const out = await next(e);
     if (id !== undefined) {
       const text = typeof out?.text === "string" ? out.text : typeof out?.result === "string" ? out.result : "";
-      const rejected = REJECTED_RE.test(typeof out?.result === "string" ? out.result : text);
-      await nod.toolResult(platform($), session, { toolUseId: id, tool, ok: out?.isError !== true && !rejected, rejected, outputChars: text.length });
+      const rejected = out?.isError === true && REJECTED_RE.test(typeof out?.result === "string" ? out.result : text);
+      void nod.toolResult(platform($), session, { toolUseId: id, tool, ok: out?.isError !== true, rejected, outputChars: text.length });
     }
     return out;
   }).catch((_$, e, next) => next(e));
 
   on("tool.check", async ($, e, next) => {
+    const started = $.clock.now();
     const verdict = await next(e);
     const id = opt(e?.tool_use_id);
     const d = verdict?.decision;
     if (id !== undefined && (d === "allow" || d === "deny" || d === "ask")) {
-      await nod.toolCheck(platform($), await currentSession($), id, String(e?.tool ?? "?"), d, opt(verdict?.reason));
+      // check_ms: lo que tardó el agente en decidir (otro mod que retiene el permiso lo alarga).
+      const checkMs = Math.max(0, Number(await $.clock.now()) - Number(await started));
+      void nod.toolCheck(platform($), await currentSession($), id, String(e?.tool ?? "?"), d, opt(verdict?.reason), checkMs);
     }
     return verdict;
+  }).catch((_$, e, next) => next(e));
+
+  // La duración real de la ejecución: con ella, el instante en que el humano aprobó un permiso es exacto.
+  // Si la organización desactiva los hooks clásicos, Nod marca la espera como aproximada (exact: false).
+  on("classic.PostToolUse", async ($, e, next) => {
+    if (typeof e?.tool_use_id === "string" && typeof e?.duration_ms === "number") void nod.toolExec(platform($), e.tool_use_id, e.duration_ms);
+    return next(e);
   }).catch((_$, e, next) => next(e));
 
   on("agent.spawn", async ($, e, next) => {
     const out = await next(e);
     const agent = opt(out?.agentId);
     if (agent !== undefined) {
-      await nod.agentSpawn(platform($), await currentSession($), {
+      void nod.agentSpawn(platform($), await currentSession($), {
         agent,
         type: opt(e?.subagentType) ?? "agent",
         description: opt(e?.description),
         background: e?.background === true,
+        fork: typeof e?.fork === "boolean" ? e.fork : undefined,
+        permissionMode: opt(e?.permissionMode),
         model: opt(out?.model),
         toolUseId: opt(e?.tool_use_id),
       });
@@ -252,6 +270,8 @@ export function register(on: On, _options?: unknown): void {
 
   on("session.end", async ($, e, next) => {
     await nod.sessionEnd(platform($), opt(e?.sessionId) ?? (await currentSession($)), opt(e?.reason) ?? "exit");
+    // Tras /clear el proceso sigue con otra sesión y sin session.start: el id se vuelve a pedir al motor.
+    sessionId = undefined;
     return next(e);
   }).catch((_$, e, next) => next(e));
 }

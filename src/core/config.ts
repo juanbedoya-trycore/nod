@@ -4,6 +4,7 @@
 // Sin nada configurado, Nod escribe en un fichero local (~/.local/state/nod/events.jsonl) con privacidad
 // `completo`: funciona sin servidor y nada sale de la máquina.
 import { PRIVACY_LEVELS } from "./events.js";
+import { isLocalUrl } from "./privacy.js";
 import type { Privacy } from "./events.js";
 
 /** Variables que lee Nod. El adaptador las lee (en Claude, con nombres literales) y las pasa tal cual. */
@@ -74,12 +75,17 @@ function expandHome(p: string, home: string | undefined): string {
 export function parseSink(raw: string, home: string | undefined, token?: string): SinkConfig | string {
   const s = raw.trim();
   if (/^https?:\/\//i.test(s)) {
+    let u: URL;
     try {
-      const u = new URL(s);
-      return { kind: "http", target: u.toString().replace(/\/+$/, ""), token };
+      u = new URL(s);
     } catch {
-      return `destino inválido: ${s}`;
+      return "destino http inválido (URL mal formada)";
     }
+    // Credenciales o parámetros en la URL acabarían en /nod y en los registros: el token va aparte.
+    if (u.username !== "" || u.password !== "" || u.search !== "" || u.hash !== "") {
+      return `destino ${u.protocol}//${u.host} ignorado: la URL no puede llevar usuario, contraseña, ?parámetros ni #fragmento (usa "token")`;
+    }
+    return { kind: "http", target: `${u.protocol}//${u.host}${u.pathname}`.replace(/\/+$/, ""), token };
   }
   const path = expandHome(s.startsWith("file:") ? s.slice(5).replace(/^\/\/(?=\/)/, "") : s, home);
   if (path.startsWith("/")) return { kind: "file", target: path };
@@ -116,9 +122,10 @@ function privacyFrom(v: unknown, warnings: string[], where: string): Privacy | u
 
 /**
  * Configuración efectiva. `fileText` es el contenido del fichero de configuración (undefined si no existe),
- * `profile` el perfil del agente y `machine` el nombre corto de la máquina (para la instancia por defecto).
+ * `profile` el perfil del agente y `anonId` un id aleatorio y estable de este perfil en esta máquina (la
+ * instancia por defecto es `<perfil>-<anonId>`: única sin revelar el nombre de la máquina).
  */
-export function resolveConfig(env: NodEnv, fileText: string | undefined, profile: string, machine: string | undefined): ConfigResult {
+export function resolveConfig(env: NodEnv, fileText: string | undefined, profile: string, anonId: string): ConfigResult {
   const warnings: string[] = [];
   let file: ConfigFile = {};
   const path = configPath(env);
@@ -137,9 +144,17 @@ export function resolveConfig(env: NodEnv, fileText: string | undefined, profile
   if (env.NOD_SINKS !== undefined && env.NOD_SINKS.trim() !== "") {
     sinks = [];
     for (const raw of env.NOD_SINKS.split(/[\s,]+/).filter(Boolean)) {
-      const parsed = parseSink(raw, env.HOME, env.NOD_TOKEN || undefined);
-      if (typeof parsed === "string") warnings.push(`NOD_SINKS: ${parsed}`);
-      else sinks.push(parsed);
+      const parsed = parseSink(raw, env.HOME);
+      if (typeof parsed === "string") {
+        warnings.push(`NOD_SINKS: ${parsed}`);
+        continue;
+      }
+      // NOD_TOKEN es para los destinos de NOD_SINKS, y nunca viaja en claro fuera de la máquina.
+      if (parsed.kind === "http" && env.NOD_TOKEN) {
+        if (parsed.target.startsWith("https://") || isLocalUrl(parsed.target)) parsed.token = env.NOD_TOKEN;
+        else warnings.push(`NOD_TOKEN no se manda a ${parsed.target}: es http sin cifrar y no es local (usa https)`);
+      }
+      sinks.push(parsed);
     }
   }
   sinks ??= sinksFrom(section.sinks, env.HOME, warnings, `${path} (perfil ${profile})`);
@@ -148,13 +163,11 @@ export function resolveConfig(env: NodEnv, fileText: string | undefined, profile
     const log = defaultLogPath(env);
     sinks = log === undefined ? [] : [{ kind: "file", target: log }];
   }
-  // NOD_TOKEN vale para los destinos http que no traen el suyo.
-  if (env.NOD_TOKEN) for (const s of sinks) if (s.kind === "http" && s.token === undefined) s.token = env.NOD_TOKEN;
 
   const privacy = privacyFrom(env.NOD_PRIVACY, warnings, "NOD_PRIVACY") ?? privacyFrom(section.privacy, warnings, `${path} (perfil ${profile})`) ?? privacyFrom(file.privacy, warnings, String(path)) ?? "completo";
 
   const wanted = env.NOD_INSTANCE || (typeof section.instance === "string" ? section.instance : undefined) || (typeof file.instance === "string" ? file.instance : undefined);
-  let instance = defaultInstance(machine, profile);
+  let instance = defaultInstance(profile, anonId);
   if (wanted !== undefined) {
     if (INSTANCE_RE.test(wanted)) instance = wanted;
     else warnings.push(`instancia "${wanted}" inválida (minúsculas, cifras, . _ -; hasta 64): uso ${instance}`);
@@ -165,10 +178,10 @@ export function resolveConfig(env: NodEnv, fileText: string | undefined, profile
   return { config: { enabled: env.NOD_OFF !== "1", instance, privacy, sinks, task, source }, warnings };
 }
 
-/** `mbp-personal`: máquina y perfil, en minúsculas y sin caracteres raros. */
-export function defaultInstance(machine: string | undefined, profile: string): string {
-  const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-._]+|[-._]+$/g, "");
-  const m = clean(machine ?? "") || "local";
-  const p = clean(profile) || "claude";
-  return `${m}-${p}`.slice(0, 64);
+/** `personal-3fa9c2d1`: perfil e id aleatorio del perfil en esta máquina, en minúsculas y sin caracteres raros. */
+export function defaultInstance(profile: string, anonId: string): string {
+  const clean = (x: string) => x.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-._]+|[-._]+$/g, "");
+  const id = clean(anonId).slice(0, 16) || "0";
+  const p = (clean(profile) || "claude").slice(0, 63 - id.length);
+  return `${p}-${id}`;
 }

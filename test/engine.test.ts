@@ -110,3 +110,94 @@ describe("/nod", () => {
     expect(await nod.runCommand(f.p, "s", "ayuda")).toContain("Nod observa tus sesiones");
   });
 });
+
+describe("robustez y privacidad del motor", () => {
+  it("/clear: la sesión nueva abre con session.start (continued) y no hereda lo anterior", async () => {
+    const f = fake();
+    const nod = new NodEngine();
+    await nod.sessionStart(f.p, "S1", { interactive: true });
+    await nod.promptSubmit(f.p, "S1", "uno", "composer");
+    f.advance(60_000);
+    await nod.sessionEnd(f.p, "S1", "clear");
+    f.advance(1_000);
+    await nod.promptSubmit(f.p, "S2", "dos", "composer");
+    f.advance(1_000);
+    await nod.sessionEnd(f.p, "S2", "exit");
+    await settle();
+    const evs = f.envelopes().flatMap((e) => e.events).map((e) => [e.type, e.session, e.data.continued ?? e.data.duration_ms ?? e.data.text]);
+    expect(evs).toEqual([
+      ["session.start", "S1", undefined],
+      ["prompt.submit", "S1", "uno"],
+      ["session.end", "S1", 60_000],
+      ["session.start", "S2", true],
+      ["prompt.submit", "S2", "dos"],
+      ["session.end", "S2", 1_000],
+    ]);
+  });
+
+  it("la privacidad guardada no relaja la del fichero; /nod privacidad no puede relajarla", async () => {
+    const store = new Map<string, unknown>([["nod.privacy", "completo"]]);
+    const f = fake({ HOME: "/h" }, store);
+    f.p.read = async () => JSON.stringify({ privacy: "trabajo" });
+    const nod = new NodEngine();
+    await nod.promptSubmit(f.p, "s", "texto del cliente", "composer");
+    await nod.sessionEnd(f.p, "s", "exit");
+    await settle();
+    expect(JSON.stringify(f.envelopes())).not.toContain("texto del cliente");
+    expect(f.envelopes()[0]!.source.privacy).toBe("trabajo");
+    expect(await nod.runCommand(f.p, "s", "privacidad completo")).toContain("solo puede endurecerla");
+  });
+
+  it("pasar a trabajo con eventos en cola: nada sale al destino remoto", async () => {
+    const posts: string[] = [];
+    const f = fake({ HOME: "/h", NOD_SINKS: "https://collector.example.com" });
+    f.p.fetch = async (_u, init) => {
+      posts.push(init.body);
+      return { status: 200, ok: true, text: "" };
+    };
+    const nod = new NodEngine();
+    await nod.runCommand(f.p, "s", "pausa");
+    await nod.promptSubmit(f.p, "s", "password hunter2", "composer");
+    expect(await nod.runCommand(f.p, "s", "privacidad trabajo")).toContain("no se entregará a");
+    await nod.runCommand(f.p, "s", "reanuda");
+    await nod.sessionEnd(f.p, "s", "exit");
+    f.advance(5_000);
+    await settle();
+    expect(posts).toEqual([]);
+  });
+
+  it("la cola de una sesión anterior en completo no sale tras arrancar en trabajo", async () => {
+    const store = new Map<string, unknown>();
+    const posts: string[] = [];
+    const a = fake({ HOME: "/h", NOD_SINKS: "https://collector.example.com" }, store);
+    a.p.fetch = async () => ({ status: 503, ok: false, text: "" });
+    const first = new NodEngine();
+    await first.promptSubmit(a.p, "s1", "ACME secreto", "composer");
+    await first.sessionEnd(a.p, "s1", "exit");
+    await settle();
+    const b = fake({ HOME: "/h", NOD_SINKS: "https://collector.example.com", NOD_PRIVACY: "trabajo" }, store);
+    b.p.fetch = async (_u, init) => {
+      posts.push(init.body);
+      return { status: 200, ok: true, text: "" };
+    };
+    b.advance(60 * 60_000);
+    const second = new NodEngine();
+    await second.sessionStart(b.p, "s2", {});
+    await second.sessionEnd(b.p, "s2", "exit");
+    await settle();
+    expect(posts.join()).not.toContain("ACME secreto");
+    expect(posts).toEqual([]);
+  });
+
+  it("un destino que acepta y no contesta no retrasa el cierre más de 3 s", async () => {
+    const f = fake({ HOME: "/h", NOD_SINKS: "https://colgado.example.com" });
+    f.p.fetch = () => new Promise(() => undefined);
+    const nod = new NodEngine();
+    await nod.sessionStart(f.p, "s", {});
+    let done = false;
+    const closing = nod.sessionEnd(f.p, "s", "exit").then(() => (done = true));
+    await settle();
+    expect(done).toBe(true); // el temporizador falso del arnés vence enseguida: lo que importa es que vence
+    await closing;
+  });
+});

@@ -1,6 +1,7 @@
 {
   "name": "nod",
   "owner": { "name": "Juan Bedoya" },
+  "description": "Nod: observa tus sesiones de Claude Code y entrega eventos Nod v1",
   "plugins": [
     { "name": "nod", "source": "./", "description": "Observa tus sesiones de Claude Code y entrega eventos Nod v1" }
   ]

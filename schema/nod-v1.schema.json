@@ -9,9 +9,10 @@
     "nod": { "const": 1 },
     "source": {
       "type": "object",
-      "required": ["instance", "host", "profile", "privacy"],
+      "required": ["instance", "run", "host", "profile", "privacy"],
       "properties": {
         "instance": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+        "run": { "type": "string", "pattern": "^[0-9a-f]{8}$" },
         "host": { "type": "string", "minLength": 1 },
         "host_version": { "type": "string" },
         "machine": { "type": "string" },
@@ -57,12 +58,13 @@
         { "if": { "properties": { "type": { "const": "permission.request" } } }, "then": { "properties": { "data": { "required": ["tool_use_id", "tool"] } } } },
         {
           "if": { "properties": { "type": { "const": "permission.decision" } } },
-          "then": { "properties": { "data": { "required": ["tool_use_id", "tool", "decision", "by", "wait_ms"], "properties": { "decision": { "enum": ["allow", "deny"] }, "by": { "enum": ["policy", "user", "remote", "timeout"] } } } } }
+          "then": { "properties": { "data": { "required": ["tool_use_id", "tool", "decision", "by", "wait_ms", "exact"], "properties": { "decision": { "enum": ["allow", "deny"] }, "by": { "enum": ["policy", "user", "remote"] }, "exact": { "type": "boolean" } } } } }
         },
         { "if": { "properties": { "type": { "const": "agent.spawn" } } }, "then": { "properties": { "data": { "required": ["agent", "type", "background"] } } } },
         { "if": { "properties": { "type": { "const": "agent.end" } } }, "then": { "properties": { "data": { "required": ["agent", "duration_ms", "usage"] } } } },
         { "if": { "properties": { "type": { "const": "command" } } }, "then": { "properties": { "data": { "required": ["name"] } } } },
-        { "if": { "properties": { "type": { "const": "task.set" } } }, "then": { "properties": { "data": { "required": ["task", "source"] } } } }
+        { "if": { "properties": { "type": { "const": "task.set" } } }, "then": { "properties": { "data": { "required": ["task", "source"], "properties": { "task": { "type": ["string", "null"] } } } } } },
+        { "if": { "properties": { "type": { "const": "usage" } } }, "then": { "properties": { "data": { "minProperties": 1 } } } }
       ]
     }
   }
