@@ -289,7 +289,7 @@ pub fn metrics(events: &[&Event]) -> Metrics {
         }
     }
     let mut rest: Vec<_> = streaks.into_iter().collect();
-    rest.sort_by(|a, b| a.1 .2.cmp(&b.1 .2));
+    rest.sort_by_key(|a| a.1 .2);
     for (key, s) in rest {
         close(&mut m, &key, s);
     }
