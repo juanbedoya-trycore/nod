@@ -105,6 +105,9 @@ Fichero `~/.config/nod/config.json` (o `$XDG_CONFIG_HOME/nod/config.json`), con 
 Un destino HTTP recibe `POST <url>/v1/events` con lotes de eventos; si no responde, Nod guarda la cola y la
 entrega cuando vuelve. Ver [la especificación](docs/nod-v1.md).
 
+Para no dejar el token en la configuración, un destino HTTP admite `"token_file": "~/.config/nod/collector.token"`
+en lugar de `"token"`: Nod lo lee al arrancar.
+
 ## Collector y panel de límites
 
 [`collector/`](collector/README.md) es `nod-collector`, un binario de Rust que recibe los eventos de Nod, los guarda
@@ -135,6 +138,51 @@ Sin collector, que lea directamente el fichero del destino:
 `#(nod-collector limits --format tmux --from-file ~/.local/state/nod/events.jsonl)`. Rojo desde el 80 %,
 amarillo desde el 50 %; sin datos, la línea queda vacía.
 
+## Aprobar desde fuera: Nod Control
+
+Opcional. Con un **controlador** (un servidor que hace de buzón, p. ej. el de Orbit) y un **aprobador** emparejado
+(el móvil, el reloj), un permiso que Claude Code te iba a preguntar en el terminal espera unos segundos a que lo
+apruebes o lo niegues desde fuera, y el aprobador puede mandarle mensajes a la sesión. Sin configurarlo, Nod no
+retiene ni cambia ninguna decisión. Especificación: [docs/control-v1.md](docs/control-v1.md).
+
+```json
+{ "control": { "url": "http://127.0.0.1:7878", "token_file": "~/.config/nod/control.token", "hold_ms": 20000 } }
+```
+
+`url` sin barra final; `token` o, mejor, `token_file` (el token no debe ir en un fichero versionado); `hold_ms`,
+cuánto espera un permiso (1000…90000, 20000 por defecto). Variables: `NOD_CONTROL` (la URL, u `off` para apagarlo)
+y `NOD_CONTROL_TOKEN`. Admite secciones por perfil como el resto.
+
+| Comando | Para |
+| --- | --- |
+| `/nod emparejar` | Muestra un QR para el aprobador y espera su oferta 2 min (barra de estado). El QR vale 15 min y una sola vez |
+| `/nod aprobadores` | Llaves emparejadas (de toda la máquina, en `~/.local/state/nod/approvers.json`) |
+| `/nod aprobadores quitar <kid>` | Revoca una: deja de contar desde la siguiente decisión |
+| `/nod lejos` / `/nod cerca` | Los permisos esperan 90 s o `hold_ms` (toda la máquina, `away.json`) |
+| `/nod` | Además del resto: controlador, aprobadores, retención y el último permiso retenido |
+
+Cómo funciona:
+
+- Solo se retiene si el canal está activo, hay al menos un aprobador emparejado y la sesión no está en *auto
+  mode* (lo que pregunta lo decide después el clasificador). El modo sale del hook `UserPromptSubmit` o, si la
+  política de plugins no lo deja llegar, de la transcripción de la sesión; si no se sabe, se retiene.
+- Gana lo primero que llegue: una decisión firmada por un aprobador emparejado, el plazo o tu Esc. Si gana la
+  decisión, Claude Code la aplica sin preguntar (y sale `permission.decision` con `by: "remote"`); si no, el
+  terminal pregunta como siempre.
+- El controlador no es de confianza: Nod comprueba cada firma (P-256) sobre los datos que él mismo generó (qué
+  tool, qué resumen, hasta cuándo), así que el controlador no puede aprobar nada ni cambiar lo que viste.
+  Con el controlador caído o colgado, Nod suelta el permiso al terminal en 3 s como mucho.
+- Lo que nunca se aprueba desde fuera (solo se puede negar): `rm -rf`, `git push --force`, despliegues
+  (`kubectl apply`, `terraform apply`, `npm publish`…) y lo que añadas en `NOD_FORBIDDEN_ADD` (array JSON de
+  regex). Tampoco un comando cuyo resumen no sea completo (cortado, con secretos ocultos o caracteres invisibles):
+  no se aprueba lo que no se ha visto entero.
+- Lo que ve el aprobador: con privacidad `completo`, el comando o la ruta (con los secretos ocultos); con
+  `redactado` o `trabajo`, solo el verbo (`npm`, `git`). Con `trabajo`, el canal solo funciona con un
+  controlador local.
+- Mensajes: un texto con el agente libre entra como prompt; a mitad de turno se le pasa al modelo con el
+  siguiente resultado de tool (y, si el turno acaba antes, como prompt). «Detente» corta el turno; «Detente y
+  resume» lo corta y pide un resumen.
+
 ## Quién lo usa
 
 - **Orbit** (las sesiones en el reloj) se alimenta de Nod.
@@ -150,7 +198,8 @@ src/core/            el núcleo, sin agente
   privacy.ts         perfiles de privacidad
   outbox.ts          entrega por destino: cola persistente, lotes, reintentos, aislamiento de rechazos
   engine.ts          NodEngine: une todo sobre una Platform; comandos /nod
-  platform.ts        lo que un agente tiene que dar (reloj, HTTP, almacén, ficheros)
+  platform.ts        lo que un agente tiene que dar (reloj, HTTP, almacén, ficheros, entropía)
+  control/           Nod Control: firmas y CBOR, verificación, retención, mensajes, emparejamiento
 src/hosts/claude/    el adaptador de Claude Code (API de mods)
 bundle/claude.js     el adaptador empaquetado en un fichero: lo que carga el plugin (versionado)
 tools/probe/         sonda de la fase 0: registra todo lo que ve el motor (para validar nombres reales)
