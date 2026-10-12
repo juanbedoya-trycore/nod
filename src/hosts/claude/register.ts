@@ -215,7 +215,14 @@ async function sessionInfo($: Engine, e: any): Promise<SessionInfo> {
     model: opt(model),
     interactive: e?.isInteractive === true,
     surface: opt(e?.surface),
+    remoteSession: await remoteSession($),
   };
+}
+
+/** Sesión de Remote Control conectada (claude.ai/code), si la hay. */
+async function remoteSession($: Engine): Promise<string | undefined> {
+  const id = await Promise.resolve().then(() => $.env.get("CLAUDE_CODE_BRIDGE_SESSION_ID")).catch(() => undefined);
+  return typeof id === "string" && /^[A-Za-z0-9_-]{4,128}$/.test(id) ? id : undefined;
 }
 
 /** Contexto, límites de uso y costo de la sesión (`$.session.usage`, si el motor lo tiene). */
@@ -230,6 +237,8 @@ async function usageSnapshot($: Engine): Promise<UsageSnapshot | undefined> {
       .map((l: any) => ({ kind: l.kind, percent_used: l.percentUsed, ...(typeof l.resetsAt === "string" ? { resets_at: l.resetsAt } : {}) }));
   }
   if (u.cost && typeof u.cost.usd === "number") out.cost_usd = u.cost.usd;
+  const remote = await remoteSession($);
+  if (remote !== undefined) out.remote_session = remote;
   return out;
 }
 
@@ -326,7 +335,7 @@ export function register(on: On, _options?: unknown): void {
     if (id !== undefined) {
       const text = typeof out?.text === "string" ? out.text : typeof out?.result === "string" ? out.result : "";
       const rejected = out?.isError === true && REJECTED_RE.test(typeof out?.result === "string" ? out.result : text);
-      void nod.toolResult(platform($), session, { toolUseId: id, tool, ok: out?.isError !== true, rejected, outputChars: text.length, output: tool === "Bash" ? text.slice(0, 2000) : undefined });
+      void nod.toolResult(platform($), session, { toolUseId: id, tool, ok: out?.isError !== true, rejected, outputChars: text.length, output: text.slice(0, 20_000) });
     }
     // Un mensaje de un aprobador llegado a mitad de turno: el modelo lo lee con este resultado, sin esperar.
     const note = nod.takeNote(opt(e?.agentId));

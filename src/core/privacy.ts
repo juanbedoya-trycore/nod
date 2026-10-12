@@ -3,7 +3,7 @@
 import type { Draft, Privacy } from "./events.js";
 
 /** Campos de `data` que llevan texto libre o rutas: fuera en `redactado` y `trabajo`. */
-const TEXT_FIELDS = ["text", "answer", "input", "description", "cwd", "title"] as const;
+const TEXT_FIELDS = ["text", "answer", "input", "description", "cwd", "title", "links", "remote_session"] as const;
 /** `reason` es texto libre (con rutas) solo en el permiso; en session.end es un valor fijo (`exit`, `clear`…). */
 const FREE_REASON = new Set(["permission.request"]);
 

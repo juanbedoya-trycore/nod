@@ -31,7 +31,7 @@ function addUsage(a, b) {
 var ZERO_USAGE = { input: 0, output: 0, cache_read: 0, cache_write: 0 };
 
 // src/core/privacy.ts
-var TEXT_FIELDS = ["text", "answer", "input", "description", "cwd", "title"];
+var TEXT_FIELDS = ["text", "answer", "input", "description", "cwd", "title", "links", "remote_session"];
 var FREE_REASON = /* @__PURE__ */ new Set(["permission.request"]);
 var BUILTIN_COMMANDS = /* @__PURE__ */ new Set([
   "exit",
@@ -5075,8 +5075,8 @@ var base64EncodeOutputStream = function() {
   };
   return _this;
 };
-var base64DecodeInputStream = function(str) {
-  const _str = str;
+var base64DecodeInputStream = function(str2) {
+  const _str = str2;
   let _pos = 0;
   let _buffer = 0;
   let _buflen = 0;
@@ -5388,6 +5388,56 @@ function qrText(text) {
   return lines.join("\n");
 }
 
+// src/core/links.ts
+var LINKS_PER_RESULT = 3;
+var ARTIFACT_RE = /https:\/\/claude\.ai\/(?:code\/)?artifact\/[A-Za-z0-9_-]+/g;
+var GITHUB_RE = /https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(pull|issues)\/(\d+)/g;
+var DOC_RE = /\.(html?|md|pdf|png|jpe?g|gif|svg|webp|csv|mp4)$/i;
+var BASH_OUT_RE = /(?:>>?|\s-o|--output[= ])\s*(['"]?)([^\s'"|;&<>]+)\1/g;
+function basename(p) {
+  const parts = p.split(/[\\/]/).filter((x) => x !== "");
+  return parts[parts.length - 1] ?? p;
+}
+function str(v) {
+  return typeof v === "string" && v !== "" ? v : void 0;
+}
+function absolute(p, cwd) {
+  if (p.startsWith("/")) return p;
+  if (cwd === void 0 || p.startsWith("~") || p.startsWith("$")) return void 0;
+  return `${cwd.replace(/\/+$/, "")}/${p.replace(/^\.\//, "")}`;
+}
+function linksOf(tool, input, resultText, isError, cwd) {
+  if (isError) return [];
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  const add = (l) => {
+    const key = l.url ?? l.path ?? "";
+    if (key === "" || seen.has(key) || out.length >= LINKS_PER_RESULT) return;
+    seen.add(key);
+    out.push(l);
+  };
+  const inp = input !== null && typeof input === "object" ? input : {};
+  if (tool === "Write") {
+    const p = str(inp.file_path);
+    if (p !== void 0) add({ kind: "file", name: basename(p), path: p });
+  }
+  if (tool === "Edit" || tool === "MultiEdit" || tool === "NotebookEdit") {
+    const p = str(inp.file_path) ?? str(inp.notebook_path);
+    if (p !== void 0 && DOC_RE.test(p)) add({ kind: "file", name: basename(p), path: p });
+  }
+  if (tool === "Bash") {
+    const cmd = str(inp.command) ?? "";
+    for (const m of cmd.matchAll(BASH_OUT_RE)) {
+      const p = m[2] !== void 0 && DOC_RE.test(m[2]) ? absolute(m[2], cwd) : void 0;
+      if (p !== void 0) add({ kind: "file", name: basename(p), path: p });
+    }
+  }
+  const text = typeof resultText === "string" ? resultText.slice(0, 2e4) : "";
+  for (const m of text.matchAll(ARTIFACT_RE)) add({ kind: "link", name: "Artifact", url: m[0] });
+  for (const m of text.matchAll(GITHUB_RE)) add({ kind: "link", name: `${m[1] === "pull" ? "PR" : "Issue"} #${m[2]}`, url: m[0] });
+  return out;
+}
+
 // src/core/normalize.ts
 var RECALL_MEMORY = 50;
 var MAX_AGENTS = 256;
@@ -5425,12 +5475,19 @@ function commitOf(input, output) {
   if (f !== null) out.files = Number(f[1]);
   return out;
 }
+function linksField(tool, input, r, cwd) {
+  if (!r.ok || r.rejected) return {};
+  const links = linksOf(tool, input, r.output, false, cwd);
+  return links.length === 0 ? {} : { links };
+}
 var Normalizer = class {
   /** Tarea en curso (§5): va en todos los eventos. */
   task;
   sessionStartTs;
   /** Nombre del repo de la sesión (va en vcs.commit). */
   repoName;
+  /** Directorio de la sesión: resuelve las rutas relativas de los ficheros que genera Bash. */
+  cwd;
   tools = /* @__PURE__ */ new Map();
   agents = /* @__PURE__ */ new Map();
   turnSteps = /* @__PURE__ */ new Map();
@@ -5458,6 +5515,7 @@ var Normalizer = class {
     this.resetSession();
     this.sessionStartTs = ts;
     this.repoName = info2.repo?.name ?? void 0;
+    this.cwd = info2.cwd;
     const data = { interactive: info2.interactive === true };
     if (info2.cwd !== void 0) data.cwd = info2.cwd;
     if (info2.repo !== void 0) {
@@ -5470,6 +5528,7 @@ var Normalizer = class {
     }
     if (info2.model !== void 0) data.model = info2.model;
     if (info2.surface !== void 0) data.surface = info2.surface;
+    if (info2.remoteSession !== void 0) data.remote_session = info2.remoteSession;
     return [this.draft(ts, "session.start", session, data)];
   }
   /** Cada cambio en el editor de prompts. No emite: se resume en el siguiente `prompt.submit`. */
@@ -5615,7 +5674,8 @@ var Normalizer = class {
       duration_ms: r.rejected ? 0 : p.execMs ?? Math.max(0, ts - began),
       ok: r.ok && !r.rejected,
       rejected: r.rejected,
-      output_chars: r.outputChars
+      output_chars: r.outputChars,
+      ...linksField(p.tool, p.input, r, this.cwd)
     }, { turn: p.turn, agent: p.agent }));
     const commit = r.ok && !r.rejected ? commitOf(p.input, r.output) : void 0;
     if (commit !== void 0) {
@@ -5644,6 +5704,7 @@ var Normalizer = class {
     if (u.context !== void 0) data.context = u.context;
     if (u.limits !== void 0) data.limits = u.limits;
     if (u.cost_usd !== void 0) data.cost_usd = u.cost_usd;
+    if (u.remote_session !== void 0) data.remote_session = u.remote_session;
     return Object.keys(data).length === 0 ? [] : [this.draft(ts, "usage", session, data)];
   }
   command(ts, session, name) {
@@ -7007,8 +7068,13 @@ async function sessionInfo($, e) {
     repo: repo && typeof repo === "object" ? { root: repo.root ?? null, remote: repo.remote ?? null, name: repo.name ?? null, branch: branch ?? null } : void 0,
     model: opt(model),
     interactive: e?.isInteractive === true,
-    surface: opt(e?.surface)
+    surface: opt(e?.surface),
+    remoteSession: await remoteSession($)
   };
+}
+async function remoteSession($) {
+  const id = await Promise.resolve().then(() => $.env.get("CLAUDE_CODE_BRIDGE_SESSION_ID")).catch(() => void 0);
+  return typeof id === "string" && /^[A-Za-z0-9_-]{4,128}$/.test(id) ? id : void 0;
 }
 async function usageSnapshot($) {
   const u = await Promise.resolve().then(() => $.session.usage()).catch(() => void 0);
@@ -7019,6 +7085,8 @@ async function usageSnapshot($) {
     out.limits = u.rateLimits.filter((l) => typeof l?.kind === "string" && typeof l?.percentUsed === "number").map((l) => ({ kind: l.kind, percent_used: l.percentUsed, ...typeof l.resetsAt === "string" ? { resets_at: l.resetsAt } : {} }));
   }
   if (u.cost && typeof u.cost.usd === "number") out.cost_usd = u.cost.usd;
+  const remote = await remoteSession($);
+  if (remote !== void 0) out.remote_session = remote;
   return out;
 }
 function toolInput(e) {
@@ -7101,7 +7169,7 @@ function register(on, _options) {
     if (id !== void 0) {
       const text = typeof out?.text === "string" ? out.text : typeof out?.result === "string" ? out.result : "";
       const rejected = out?.isError === true && REJECTED_RE.test(typeof out?.result === "string" ? out.result : text);
-      void nod.toolResult(platform($), session, { toolUseId: id, tool, ok: out?.isError !== true, rejected, outputChars: text.length, output: tool === "Bash" ? text.slice(0, 2e3) : void 0 });
+      void nod.toolResult(platform($), session, { toolUseId: id, tool, ok: out?.isError !== true, rejected, outputChars: text.length, output: text.slice(0, 2e4) });
     }
     const note = nod.takeNote(opt(e?.agentId));
     return note === void 0 ? out : withContext(out, note);

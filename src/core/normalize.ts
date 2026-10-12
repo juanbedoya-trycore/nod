@@ -3,6 +3,7 @@
 // ningún hook: quién decidió cada permiso y cuánto se esperó al humano, si el prompt se reescribió o salió
 // del historial, el costo acumulado de cada subagente.
 import { addUsage, ZERO_USAGE } from "./events.js";
+import { linksOf } from "./links.js";
 import type { Draft, EventType, Usage } from "./events.js";
 
 export interface SessionInfo {
@@ -11,6 +12,8 @@ export interface SessionInfo {
   model?: string | undefined;
   interactive?: boolean | undefined;
   surface?: string | undefined;
+  /** Sesión de Remote Control de claude.ai, si la hay: deja abrir esta sesión en la app de Claude. */
+  remoteSession?: string | undefined;
 }
 
 /** Una pulsación o pegado en el editor de prompts: texto previo, rango sustituido y lo insertado. */
@@ -57,11 +60,13 @@ export interface ToolResultInfo {
   /** El humano negó el permiso (el agente lo devuelve como resultado de la tool). */
   rejected: boolean;
   outputChars: number;
-  /** Comienzo de la salida (no se emite): sirve para reconocer el commit que creó un `git commit`. */
+  /** Comienzo de la salida (no se emite): sirve para reconocer el commit de un `git commit` y los enlaces. */
   output?: string | undefined;
 }
 
 export interface UsageSnapshot {
+  /** Sesión de Remote Control (puede conectarse a mitad de sesión). */
+  remote_session?: string | undefined;
   context?: { tokens?: number; window?: number; percent?: number } | undefined;
   limits?: { kind: string; percent_used: number; resets_at?: string }[] | undefined;
   cost_usd?: number | undefined;
@@ -141,12 +146,20 @@ export function commitOf(input: unknown, output: string | undefined): { sha: str
   return out;
 }
 
+function linksField(tool: string, input: unknown, r: ToolResultInfo, cwd: string | undefined): Record<string, unknown> {
+  if (!r.ok || r.rejected) return {};
+  const links = linksOf(tool, input, r.output, false, cwd);
+  return links.length === 0 ? {} : { links };
+}
+
 export class Normalizer {
   /** Tarea en curso (§5): va en todos los eventos. */
   task: string | undefined;
   private sessionStartTs: number | undefined;
   /** Nombre del repo de la sesión (va en vcs.commit). */
   private repoName: string | undefined;
+  /** Directorio de la sesión: resuelve las rutas relativas de los ficheros que genera Bash. */
+  private cwd: string | undefined;
   private readonly tools = new Map<string, PendingTool>();
   private readonly agents = new Map<string, AgentRun>();
   private readonly turnSteps = new Map<string, number>();
@@ -177,6 +190,7 @@ export class Normalizer {
     this.resetSession();
     this.sessionStartTs = ts;
     this.repoName = info.repo?.name ?? undefined;
+    this.cwd = info.cwd;
     const data: Record<string, unknown> = { interactive: info.interactive === true };
     if (info.cwd !== undefined) data.cwd = info.cwd;
     if (info.repo !== undefined) {
@@ -189,6 +203,7 @@ export class Normalizer {
     }
     if (info.model !== undefined) data.model = info.model;
     if (info.surface !== undefined) data.surface = info.surface;
+    if (info.remoteSession !== undefined) data.remote_session = info.remoteSession;
     return [this.draft(ts, "session.start", session, data)];
   }
 
@@ -355,6 +370,7 @@ export class Normalizer {
       ok: r.ok && !r.rejected,
       rejected: r.rejected,
       output_chars: r.outputChars,
+      ...linksField(p.tool, p.input, r, this.cwd),
     }, { turn: p.turn, agent: p.agent }));
     const commit = r.ok && !r.rejected ? commitOf(p.input, r.output) : undefined;
     if (commit !== undefined) {
@@ -386,6 +402,7 @@ export class Normalizer {
     if (u.context !== undefined) data.context = u.context;
     if (u.limits !== undefined) data.limits = u.limits;
     if (u.cost_usd !== undefined) data.cost_usd = u.cost_usd;
+    if (u.remote_session !== undefined) data.remote_session = u.remote_session;
     return Object.keys(data).length === 0 ? [] : [this.draft(ts, "usage", session, data)];
   }
 

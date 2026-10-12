@@ -80,19 +80,19 @@ Tiempos en `*_ms`; tokens en `usage` = `{ "input", "output", "cache_read", "cach
 
 | `type` | Cuándo | `data` |
 | --- | --- | --- |
-| `session.start` | empieza la sesión | `interactive`; *opc.*: `cwd`, `repo` {`root`, `remote`, `name`, `branch`}, `model`, `surface` (`terminal`, `ide`…), `continued` (`true`: el agente cambió de sesión sin anunciarlo, p. ej. tras `/clear`) |
+| `session.start` | empieza la sesión | `interactive`; *opc.*: `cwd`, `repo` {`root`, `remote`, `name`, `branch`}, `model`, `surface` (`terminal`, `ide`…), `remote_session` (sesión de Remote Control de claude.ai: la abre en la app de Claude), `continued` (`true`: el agente cambió de sesión sin anunciarlo, p. ej. tras `/clear`) |
 | `session.end` | termina | `reason` (`exit`, `clear`…), `duration_ms` |
 | `prompt.submit` | se envía un prompt | `origin` (`composer` = el humano; `task-notification`, `queue`… = otros), `chars`; *opc.*: `text`, `edit` {`events`, `typing_ms`, `recalled`, `revised`} (solo en `composer`) |
 | `turn.start` | empieza un turno de la sesión principal (los subagentes no lo tienen) | — |
 | `turn.step` | termina una llamada al modelo | `index`, `tools` (nombres), `usage`; *opc.*: `model`, `effort`, `stop_reason`, `partial` (`true`: sin motivo de parada, la llamada se cortó y `usage` puede quedarse corto) |
 | `turn.end` | termina el turno | `outcome` (`answer`, `aborted`…), `usage` (suma de sus pasos), `steps`, `answer_chars`; *opc.*: `duration_ms` (lo da el agente; si falta, un consumidor puede usar `ts` de `turn.end` menos el de `turn.start`), `answer` |
 | `tool.call` | el agente va a usar una tool | `tool_use_id`, `tool`; *opc.*: `verb` (programa de un comando de shell), `input` |
-| `tool.result` | la tool terminó | `tool_use_id`, `tool`, `duration_ms` (ejecución), `ok`, `rejected` (el humano la negó), `output_chars` |
+| `tool.result` | la tool terminó | `tool_use_id`, `tool`, `duration_ms` (ejecución), `ok`, `rejected` (el humano la negó), `output_chars`; *opc.*: `links` (lo que produjo, hasta 3: `{kind: "file", name, path}` para ficheros escritos o documentos generados, `{kind: "link", name, url}` para PRs, issues y artifacts) |
 | `permission.request` | el agente pregunta al humano | `tool_use_id`, `tool`; *opc.*: `reason`, `check_ms` (lo que tardó en decidir preguntar: crece si otro mod retuvo el permiso) |
 | `permission.decision` | se decidió un permiso | `tool_use_id`, `tool`, `decision` (`allow`/`deny`), `by` (`policy`, `user`, `remote`), `wait_ms`, `exact`; *opc.*: `check_ms` (solo con `by: "policy"`: un permiso lleva `check_ms` en su `permission.request` o en su decisión, nunca en los dos) |
 | `agent.spawn` | arranca un subagente | `agent`, `type`, `background`; *opc.*: `fork`, `permission_mode`, `description`, `model`, `tool_use_id` |
 | `agent.end` | acaba un turno del subagente | `agent`, `duration_ms`, `usage` (acumulado desde su arranque; si hay varios, vale el último) |
-| `usage` | instantánea de consumo, al final de cada turno principal | al menos uno de: `context` {`tokens`, `window`, `percent`}, `limits` [{`kind` (`five_hour`, `seven_day`; otros posibles), `percent_used` (0–100), `resets_at` opc. (ISO 8601)}], `cost_usd` (acumulado de la sesión **en este proceso**: al reanudarla en otro proceso vuelve a empezar) |
+| `usage` | instantánea de consumo, al final de cada turno principal | al menos uno de: `context` {`tokens`, `window`, `percent`}, `limits` [{`kind` (`five_hour`, `seven_day`; otros posibles), `percent_used` (0–100), `resets_at` opc. (ISO 8601)}], `cost_usd` (acumulado de la sesión **en este proceso**: al reanudarla en otro proceso vuelve a empezar), `remote_session` *opc.* (si Remote Control se conectó después) |
 | `command` | el humano ejecuta un comando de barra | `name` (sin argumentos) |
 | `task.set` | cambia la tarea | `task` (`null` = tarea cerrada), `source` (`command`, `env`, `branch`); *opc.*: `title` |
 | `vcs.commit` | un comando de la sesión creó un commit (p. ej. `git commit` desde Bash) | `sha` (completo o abreviado, como lo dio git), *opc.*: `branch`, `repo` (nombre), `tool_use_id`, `files` (número de ficheros cambiados) |
@@ -120,7 +120,7 @@ Tiempos en `*_ms`; tokens en `usage` = `{ "input", "output", "cache_read", "cach
 | Perfil | Qué sale | Destinos |
 | --- | --- | --- |
 | `completo` | todo, también `text`, `answer`, `input`, rutas y `machine` | cualquiera |
-| `redactado` | sin `text`, `answer`, `input`, `description`, `title`, `cwd`, `repo.root`, `repo.remote`, el `reason` del permiso ni `machine`. Los identificadores que escribe el usuario (tarea, rama, comandos propios, tipos de subagente propios, servidores MCP) van como hash `h-xxxxxxxx`: se puede agrupar, no leer. Quedan tipos, tiempos, tokens, nombres de tool, `verb`, `repo.name` y longitudes | cualquiera |
+| `redactado` | sin `text`, `answer`, `input`, `description`, `title`, `cwd`, `links`, `remote_session`, `repo.root`, `repo.remote`, el `reason` del permiso ni `machine`. Los identificadores que escribe el usuario (tarea, rama, comandos propios, tipos de subagente propios, servidores MCP) van como hash `h-xxxxxxxx`: se puede agrupar, no leer. Quedan tipos, tiempos, tokens, nombres de tool, `verb`, `repo.name` y longitudes | cualquiera |
 | `trabajo` | como `redactado`, pero con los identificadores legibles (no salen de la máquina) | solo locales: ficheros y URLs de `localhost`, `127.0.0.1` o `::1` |
 
 - El perfil se aplica **antes** de encolar. Si se endurece (por `/nod privacidad` o al arrancar con otro

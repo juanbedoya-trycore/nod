@@ -196,3 +196,27 @@ describe("git (fase 2)", () => {
     expect(n.toolResult(5, S, { toolUseId: "u", tool: "Bash", ok: false, rejected: false, outputChars: 0, output: "[main 1234567] x" }).map((e) => e.type)).toEqual(["tool.result"]);
   });
 });
+
+describe("lo que produce la sesión", () => {
+  it("links: fichero escrito, PR y artifact; nada si la tool falló", () => {
+    const n = new Normalizer();
+    n.sessionStart(0, S, { cwd: "/repo" });
+    n.toolCall(1, S, { toolUseId: "w", tool: "Write", input: { file_path: "/repo/informe.html" } });
+    expect(n.toolResult(2, S, { toolUseId: "w", tool: "Write", ok: true, rejected: false, outputChars: 0, output: "" })[0]!.data.links).toEqual([{ kind: "file", name: "informe.html", path: "/repo/informe.html" }]);
+    n.toolCall(3, S, { toolUseId: "b", tool: "Bash", input: { command: "gh pr create && pandoc x -o out/doc.pdf" } });
+    const links = n.toolResult(4, S, { toolUseId: "b", tool: "Bash", ok: true, rejected: false, outputChars: 50, output: "https://github.com/a/b/pull/42\nhttps://claude.ai/code/artifact/abc_1" })[0]!.data.links;
+    expect(links).toEqual([
+      { kind: "file", name: "doc.pdf", path: "/repo/out/doc.pdf" },
+      { kind: "link", name: "Artifact", url: "https://claude.ai/code/artifact/abc_1" },
+      { kind: "link", name: "PR #42", url: "https://github.com/a/b/pull/42" },
+    ]);
+    n.toolCall(5, S, { toolUseId: "x", tool: "Write", input: { file_path: "/repo/a.md" } });
+    expect(n.toolResult(6, S, { toolUseId: "x", tool: "Write", ok: false, rejected: false, outputChars: 0 })[0]!.data.links).toBeUndefined();
+  });
+
+  it("remote_session en session.start y en usage", () => {
+    const n = new Normalizer();
+    expect(n.sessionStart(0, S, { remoteSession: "session_01ABC" })[0]!.data.remote_session).toBe("session_01ABC");
+    expect(n.usage(1, S, { remote_session: "session_01ABC" })[0]!.data.remote_session).toBe("session_01ABC");
+  });
+});
