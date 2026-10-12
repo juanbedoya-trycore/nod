@@ -4,11 +4,25 @@
 # del plugin en el perfil, instala o actualiza nod@nod y quita las versiones anteriores del mod
 # (orbit@orbit-local del instalador de Orbit y orbit@orbit): con dos activos, cada evento saldría dos
 # veces. No toca nada si la versión instalada ya es la del flake.
+#
+# programs.nod.collector: nod-collector como servicio (launchd en macOS, systemd en Linux) y, salvo que
+# programs.nod.settings diga otra cosa, la configuración de Nod que le entrega los eventos.
 self:
 { config, lib, pkgs, ... }:
 let
   cfg = config.programs.nod;
+  col = cfg.collector;
   home = config.home.homeDirectory;
+  json = pkgs.formats.json { };
+  # Con el collector: el fichero de siempre (lo lee `limits --from-file` y queda si el collector se para) y el
+  # collector. Si el servicio aún no ha arrancado, Nod guarda la cola y reintenta.
+  collectorSettings = {
+    sinks = [
+      { file = "~/.local/state/nod/events.jsonl"; }
+      { url = "http://${col.listen}"; }
+    ];
+  };
+  collectorArgs = [ "${col.package}/bin/nod-collector" "serve" "--listen" col.listen "--db" "${config.xdg.stateHome}/nod/nod.db" ];
   marketplace = "${config.xdg.dataHome}/nod/claude-plugin";
   wsProfiles = "${config.xdg.stateHome}/ws/claude";
   sync = pkgs.writeShellApplication {
@@ -94,9 +108,40 @@ in {
       default = pkgs.stdenv.isDarwin;
       description = "Instala Nod también en los perfiles de ws que se creen después (agente de launchd).";
     };
+    settings = lib.mkOption {
+      type = json.type;
+      default = { };
+      example = lib.literalExpression ''{ sinks = [ { url = "http://homelab:8787"; } ]; privacy = "redactado"; }'';
+      description = ''
+        Contenido de ~/.config/nod/config.json (ver el README). Si no está vacío, manda: se escribe tal cual,
+        también con el collector activado.
+      '';
+    };
+    collector = {
+      enable = lib.mkEnableOption "nod-collector como servicio (`serve`), con Nod entregándole los eventos";
+      package = lib.mkOption {
+        type = lib.types.package;
+        default = self.packages.${pkgs.stdenv.hostPlatform.system}.collector;
+        description = "El paquete de nod-collector.";
+      };
+      listen = lib.mkOption {
+        type = lib.types.str;
+        default = "127.0.0.1:8787";
+        description = "Dirección en la que escucha el collector (y a la que Nod entrega).";
+      };
+      tmux = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Pone nod-collector en el PATH para la barra de tmux (`nod-collector limits --format tmux`), aunque el
+          collector no esté activado. La línea de `status-right` la añades tú en tu configuración de tmux (ver el
+          README): este módulo no la toca.
+        '';
+      };
+    };
   };
 
-  config = lib.mkIf cfg.enable {
+  config = lib.mkMerge [ (lib.mkIf cfg.enable {
     # Ruta estable para el marketplace: Claude la guarda; el enlace cambia de destino en cada versión.
     xdg.dataFile."nod/claude-plugin".source = cfg.package;
     home.packages = [ sync ];
@@ -114,5 +159,38 @@ in {
         StandardOutPath = "${home}/Library/Logs/nod-sync.log";
       };
     };
-  };
+  })
+
+  (lib.mkIf (col.enable || col.tmux) {
+    home.packages = [ col.package ];
+  })
+
+  (lib.mkIf (cfg.settings != { } || col.enable) {
+    xdg.configFile."nod/config.json".source =
+      json.generate "nod-config.json" (if cfg.settings != { } then cfg.settings else collectorSettings);
+  })
+
+  (lib.mkIf (col.enable && pkgs.stdenv.hostPlatform.isDarwin) {
+    launchd.agents.nod-collector = {
+      enable = true;
+      config = {
+        ProgramArguments = collectorArgs;
+        RunAtLoad = true;
+        KeepAlive = true;
+        StandardErrorPath = "${home}/Library/Logs/nod-collector.log";
+        StandardOutPath = "${home}/Library/Logs/nod-collector.log";
+      };
+    };
+  })
+
+  (lib.mkIf (col.enable && pkgs.stdenv.hostPlatform.isLinux) {
+    systemd.user.services.nod-collector = {
+      Unit.Description = "nod-collector: eventos Nod v1";
+      Service = {
+        ExecStart = lib.escapeShellArgs collectorArgs;
+        Restart = "on-failure";
+      };
+      Install.WantedBy = [ "default.target" ];
+    };
+  }) ];
 }

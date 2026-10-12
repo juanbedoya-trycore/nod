@@ -47,6 +47,10 @@ instala en los perfiles nuevos en cuanto aparecen. Si encuentra una versión ant
 | `programs.nod.claude` | `~/.local/bin/claude` | El binario con el que se instala el plugin |
 | `programs.nod.profiles` | `[]` (todos) | Lista fija de directorios de configuración de Claude Code |
 | `programs.nod.watchProfiles` | `true` en macOS | Instalar también en los perfiles de ws que se creen después |
+| `programs.nod.settings` | `{}` | El `~/.config/nod/config.json` (ver [Configuración](#configuración)); si no está vacío, manda |
+| `programs.nod.collector.enable` | `false` | [nod-collector](#collector-y-panel-de-límites) como servicio, y Nod entregándole los eventos |
+| `programs.nod.collector.listen` | `127.0.0.1:8787` | Dónde escucha el collector |
+| `programs.nod.collector.tmux` | `false` | `nod-collector` en el PATH para la barra de tmux (la línea de tmux la pones tú) |
 
 ## Qué mide
 
@@ -101,10 +105,41 @@ Fichero `~/.config/nod/config.json` (o `$XDG_CONFIG_HOME/nod/config.json`), con 
 Un destino HTTP recibe `POST <url>/v1/events` con lotes de eventos; si no responde, Nod guarda la cola y la
 entrega cuando vuelve. Ver [la especificación](docs/nod-v1.md).
 
+## Collector y panel de límites
+
+[`collector/`](collector/README.md) es `nod-collector`, un binario de Rust que recibe los eventos de Nod, los guarda
+en SQLite y responde con métricas por tarea. También da el panel de límites de uso para tmux, con o sin
+collector en marcha.
+
+```sh
+nod-collector serve                    # POST /v1/events, GET /v1/limits, GET /health en 127.0.0.1:8787
+nod-collector import ~/.local/state/nod/events.jsonl   # carga lo que ya escribió el destino fichero
+nod-collector report --since 7d        # por tarea: tiempos, autonomía, permisos, bucles, tokens, caché, costo
+nod-collector limits --format tmux     # 5h 37% ↻2h10 · 7d 12%
+```
+
+Con home-manager, `programs.nod.collector.enable = true;` lo deja corriendo (agente de launchd, con el log en
+`~/Library/Logs/nod-collector.log`; en Linux, un servicio de systemd de usuario) y escribe `~/.config/nod/config.json` con dos destinos: el fichero
+`~/.local/state/nod/events.jsonl` y `http://<listen>`. Si ya tienes un `config.json` propio, pásalo a
+`programs.nod.settings`, que manda sobre eso.
+
+Para la barra de tmux (`programs.nod.collector.tmux = true;` pone el binario en el PATH), añade a tu
+configuración de tmux:
+
+```tmux
+set -g status-interval 15
+set -g status-right '#(nod-collector limits --format tmux) %H:%M'
+```
+
+Sin collector, que lea directamente el fichero del destino:
+`#(nod-collector limits --format tmux --from-file ~/.local/state/nod/events.jsonl)`. Rojo desde el 80 %,
+amarillo desde el 50 %; sin datos, la línea queda vacía.
+
 ## Quién lo usa
 
 - **Orbit** (las sesiones en el reloj) se alimenta de Nod.
-- Un **collector** propio (fase 1 del roadmap) guarda los eventos y calcula las métricas por tarea.
+- El [**collector**](#collector-y-panel-de-límites) de este repo guarda los eventos y calcula las métricas por
+  tarea.
 - Cualquiera que lea Nod v1: el formato no sabe de quién lo consume.
 
 ## Cómo está hecho
@@ -120,6 +155,7 @@ src/hosts/claude/    el adaptador de Claude Code (API de mods)
 bundle/claude.js     el adaptador empaquetado en un fichero: lo que carga el plugin (versionado)
 tools/probe/         sonda de la fase 0: registra todo lo que ve el motor (para validar nombres reales)
 nix/                 el módulo de home-manager
+collector/           nod-collector (Rust): ingesta, SQLite, report y limits
 ```
 
 Otro agente (OpenCode, Codex…) es otro adaptador en `src/hosts/<agente>/` sobre el mismo `NodEngine`.
@@ -136,6 +172,9 @@ claude --plugin-dir .  # probar sin instalar
 ```
 
 `bundle/claude.js` se versiona: tras cambiar `src/`, `npm run build` y commit del bundle.
+
+El collector: `cd collector && cargo test && cargo clippy --all-targets -- -D warnings && cargo fmt --check`, y
+`nix build .#collector`.
 
 Para ver los eventos crudos de una versión nueva de Claude Code:
 `NOD_PROBE_LOG=/tmp/probe.jsonl claude --plugin-dir tools/probe`.
