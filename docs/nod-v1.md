@@ -94,7 +94,7 @@ Tiempos en `*_ms`; tokens en `usage` = `{ "input", "output", "cache_read", "cach
 | `agent.end` | acaba un turno del subagente | `agent`, `duration_ms`, `usage` (acumulado desde su arranque; si hay varios, vale el último) |
 | `usage` | instantánea de consumo, al final de cada turno principal | al menos uno de: `context` {`tokens`, `window`, `percent`}, `limits` [{`kind` (`five_hour`, `seven_day`; otros posibles), `percent_used` (0–100), `resets_at` opc. (ISO 8601)}], `cost_usd` (acumulado de la sesión **en este proceso**: al reanudarla en otro proceso vuelve a empezar), `remote_session` *opc.* (si Remote Control se conectó después) |
 | `command` | el humano ejecuta un comando de barra | `name` (sin argumentos) |
-| `task.set` | cambia la tarea | `task` (`null` = tarea cerrada), `source` (`command`, `env`, `branch`); *opc.*: `title` |
+| `task.set` | cambia la tarea | `task` (`null` = tarea cerrada), `source` (`command`, `env`, `trycore`, `branch`); *opc.*: `title` |
 | `vcs.commit` | un comando de la sesión creó un commit (p. ej. `git commit` desde Bash) | `sha` (completo o abreviado, como lo dio git), *opc.*: `branch`, `repo` (nombre), `tool_use_id`, `files` (número de ficheros cambiados) |
 
 ### 3.1 Reglas de derivación
@@ -136,9 +136,18 @@ Tiempos en `*_ms`; tokens en `usage` = `{ "input", "output", "cache_read", "cach
 ## 5. Tareas y git
 
 Una sesión puede asociarse a una tarea (historia de usuario, ticket) para medir su costo, por orden de
-preferencia: `/nod tarea <id> [título]`, la variable `NOD_TASK`, o la rama de git si su nombre lleva un id de
-ticket (`feature/ABC-123-login` → `ABC-123`, patrón `[A-Z][A-Z0-9]+-[0-9]+`). Todos los eventos posteriores
-llevan `task`.
+preferencia: `/nod tarea <id> [título]`, la variable `NOD_TASK`, el slice activo del arnés de Trycore, o la rama
+de git si su nombre lleva un id de ticket (`feature/ABC-123-login` → `ABC-123`, patrón `[A-Z][A-Z0-9]+-[0-9]+`).
+Todos los eventos posteriores llevan `task`.
+
+**Arnés de Trycore.** Si el proyecto usa trycore-spec-build-harness, la tarea es la épica de su slice activo
+(`source: "trycore"`), y `title` lleva el título de la épica y sus historias (`Precios · HU-010, HU-011`). Se lee
+de `<raíz del repo>/.claude/state/runtime-projection.json` (la proyección del hub, modos `runtime` y `dual`) o, si
+no existe, de `.claude/state/build-state.json` (`legacy`); manda el primero que exista. Se mira al empezar la
+sesión y antes de cada prompt, así que sigue a `slice-ops claim`, `open` y `archive`: cuando el slice cambia se
+emite otro `task.set`, y cuando el arnés deja de tener slice activo, uno con `task: null`. Nunca pisa una tarea
+fijada con `/nod tarea` o `NOD_TASK`; sí la deducida de la rama. Se lee el estado del árbol de la sesión, no el
+del clon principal: en un frente paralelo cada worktree tiene su slice.
 
 **Proceso y resultado.** Nod mide el proceso (cómo se trabajó); el resultado (qué se entregó, si aguantó) sale
 del historial de git, por ejemplo con chrono. Los une `vcs.commit`: cada commit que crea una sesión queda con

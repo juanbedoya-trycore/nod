@@ -95,7 +95,7 @@ Lo que cambia respecto de Claude Code, por lo que da la API de plugins de OpenCo
 | ¿Cuántos turnos hace el agente por cada prompt mío? | `prompt.submit` con `origin: "composer"` frente a `turn.step` |
 | ¿Interrumpí o reescribí? | `turn.end.outcome = "aborted"`, `prompt.submit.edit` (`revised`, `recalled`, `typing_ms`) |
 | ¿Cuántos tokens y cuánta caché por tarea? | Σ `turn.step.usage` (incluye subagentes; `turn.end` y `agent.end` son agregados, no se suman), agrupado por `task` |
-| ¿Qué commits salieron de cada tarea? | `vcs.commit` (sha, rama), con la tarea deducida de la rama o de `/nod tarea` |
+| ¿Qué commits salieron de cada tarea? | `vcs.commit` (sha, rama), con la tarea deducida de la rama, del slice activo del arnés de Trycore o de `/nod tarea` |
 | ¿Cuánto me queda del límite de 5 h? | `usage.limits` (5 h y 7 días, con su renovación), `usage.context`, `usage.cost_usd` |
 
 Las señales humanas (aprobar o negar, interrumpir, reescribir un prompt) solo las ve un mod: no existen en los

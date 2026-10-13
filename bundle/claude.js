@@ -5075,8 +5075,8 @@ var base64EncodeOutputStream = function() {
   };
   return _this;
 };
-var base64DecodeInputStream = function(str2) {
-  const _str = str2;
+var base64DecodeInputStream = function(str3) {
+  const _str = str3;
   let _pos = 0;
   let _buffer = 0;
   let _buflen = 0;
@@ -6447,6 +6447,36 @@ var Outbox = class {
   }
 };
 
+// src/core/trycore.ts
+var TRYCORE_STATE = [".claude/state/runtime-projection.json", ".claude/state/build-state.json"];
+var str2 = (v) => typeof v === "string" && v.trim() !== "" ? v.trim() : void 0;
+function sliceFrom(text) {
+  let doc;
+  try {
+    doc = JSON.parse(text);
+  } catch {
+    return void 0;
+  }
+  if (doc === null || typeof doc !== "object" || !("active_slice" in doc)) return void 0;
+  const s = doc.active_slice;
+  if (s === null || typeof s !== "object") return null;
+  const sl = s;
+  const task = str2(sl.epic_code) ?? str2(sl.epica);
+  if (task === void 0) return null;
+  const hus = (Array.isArray(sl.hus) ? sl.hus : []).map((h) => str2(h) ?? (h !== null && typeof h === "object" ? str2(h.code) ?? str2(h.id) : void 0)).filter((h) => h !== void 0);
+  const title = [str2(sl.epic_title), hus.length > 0 ? hus.join(", ") : void 0].filter((t) => t !== void 0).join(" \xB7 ");
+  return title === "" ? { task } : { task, title };
+}
+async function trycoreSlice(read, root) {
+  for (const rel of TRYCORE_STATE) {
+    const text = await read(`${root.replace(/\/+$/, "")}/${rel}`).catch(() => void 0);
+    if (text === void 0) continue;
+    const slice = sliceFrom(text);
+    if (slice !== void 0) return slice ?? void 0;
+  }
+  return void 0;
+}
+
 // src/core/engine.ts
 var COMMAND_DESCRIPTION = "Nod: estado de la sesi\xF3n, los destinos y el canal de control; /nod tarea, privacidad, pausa, reanuda, emparejar, aprobadores, lejos, cerca";
 var KEYS = {
@@ -6478,6 +6508,10 @@ var NodEngine = class {
   timer;
   stats = freshStats();
   session;
+  /** De dónde salió la tarea en curso (`command`, `env`, `trycore`, `branch`): lo que fija el humano no se pisa. */
+  taskSource;
+  /** Raíz del proyecto de la sesión, donde se busca el estado del arnés de Trycore. */
+  root;
   /** Todo el trabajo va en fila: el adaptador no espera (no retrasa al agente) y el orden se conserva. */
   chain = Promise.resolve();
   /** Esta ejecución del agente (un proceso): `seq` empieza en 1 y es único dentro de ella (Nod v1 §1.3). */
@@ -6496,11 +6530,11 @@ var NodEngine = class {
       this.started.add(session);
       this.stats = freshStats();
       const out = this.norm.sessionStart(now, session, info2);
-      if (this.norm.task === void 0) {
-        const fromBranch = taskFromBranch(info2.repo?.branch);
-        if (rt.config.task !== void 0) out.push(...this.norm.setTask(now, session, rt.config.task, void 0, "env"));
-        else if (fromBranch !== void 0) out.push(...this.norm.setTask(now, session, fromBranch, void 0, "branch"));
-      }
+      this.root = info2.repo?.root ?? info2.cwd;
+      if (this.norm.task === void 0 && rt.config.task !== void 0) out.push(...this.setTask(now, session, rt.config.task, void 0, "env"));
+      out.push(...await this.harnessTask(p, now, session));
+      const fromBranch = taskFromBranch(info2.repo?.branch);
+      if (this.norm.task === void 0 && fromBranch !== void 0) out.push(...this.setTask(now, session, fromBranch, void 0, "branch"));
       this.channel.sessionStarted(p, this.ctx(rt), session);
       return out;
     });
@@ -6512,7 +6546,7 @@ var NodEngine = class {
     });
   }
   async promptSubmit(p, session, text, origin) {
-    await this.guard(p, "prompt.submit", async (now) => this.norm.promptSubmit(now, session, { text, origin }));
+    await this.guard(p, "prompt.submit", async (now) => [...await this.harnessTask(p, now, session), ...this.norm.promptSubmit(now, session, { text, origin })]);
   }
   async turnStart(p, session, turn, agent) {
     await this.guard(p, "turn.start", async (now) => {
@@ -6671,6 +6705,21 @@ var NodEngine = class {
     if (rt.info.machine !== void 0 && privacy === "completo") s.machine = rt.info.machine;
     return s;
   }
+  setTask(now, session, task, title, source) {
+    this.taskSource = task === void 0 && source !== "command" ? void 0 : source;
+    return this.norm.setTask(now, session, task, title, source);
+  }
+  /**
+   * La tarea según el slice activo del arnés de Trycore, si cambió. No pisa lo que fijó el humano (`/nod tarea`,
+   * NOD_TASK); sí la rama, que es una pista más débil. Si el arnés deja de tener slice, cierra la tarea que puso.
+   */
+  async harnessTask(p, now, session) {
+    if (this.taskSource === "command" || this.taskSource === "env" || this.root === void 0) return [];
+    const slice = await trycoreSlice(p.read, this.root);
+    if (slice === void 0) return this.taskSource === "trycore" ? this.setTask(now, session, void 0, void 0, "trycore") : [];
+    if (this.taskSource === "trycore" && slice.task === this.norm.task) return [];
+    return this.setTask(now, session, slice.task, slice.title, "trycore");
+  }
   ctx(rt) {
     return { enabled: rt.config.enabled, config: rt.config.control, privacy: rt.privacy, instance: rt.config.instance, env: rt.env };
   }
@@ -6823,8 +6872,8 @@ var NodEngine = class {
       const clear = rest.length === 1 && /^(fin|ninguna|none|clear|-)$/i.test(rest[0]);
       const id = clear ? void 0 : rest[0];
       const title = clear || rest.length < 2 ? void 0 : rest.slice(1).join(" ");
-      if (rt.config.enabled) await this.guard(p, "task.set", async (at) => this.norm.setTask(at, this.session ?? session, id, title, "command"));
-      else this.norm.task = id;
+      if (rt.config.enabled) await this.guard(p, "task.set", async (at) => this.setTask(at, this.session ?? session, id, title, "command"));
+      else [this.norm.task, this.taskSource] = [id, "command"];
       return id === void 0 ? "tarea cerrada: lo que sigue no se asocia a ninguna" : `tarea: ${id}${title ? ` (${title})` : ""}. Todo lo que siga en esta sesi\xF3n cuenta para ella.`;
     }
     return await this.channel.command(p, this.ctx(rt), v, rest) ?? USAGE;

@@ -221,3 +221,83 @@ describe("tarea desde la rama", () => {
     expect(g.envelopes().flatMap((e) => e.events).find((e) => e.type === "task.set")!.data).toEqual({ task: "XY-1", source: "env" });
   });
 });
+
+describe("tarea desde el arnés de Trycore", () => {
+  const root = "/r";
+  const projection = (slice: unknown) => JSON.stringify({ source: "agent_context", active_slice: slice });
+  const events = (f: ReturnType<typeof fake>) => f.envelopes().flatMap((e) => e.events);
+
+  function withState(state: Map<string, string>) {
+    const f = fake();
+    f.p.read = async (path) => {
+      const text = state.get(path);
+      if (text === undefined) throw new Error("ENOENT");
+      return text;
+    };
+    return f;
+  }
+
+  it("el slice activo manda sobre la rama, y la proyección del hub sobre build-state.json", async () => {
+    const state = new Map([
+      [`${root}/.claude/state/runtime-projection.json`, projection({ epic_code: "EP-003", epic_title: "Precios", hus: ["HU-010", { code: "HU-011" }] })],
+      [`${root}/.claude/state/build-state.json`, JSON.stringify({ active_slice: { epica: "EP-001" } })],
+    ]);
+    const f = withState(state);
+    const nod = new NodEngine();
+    await nod.sessionStart(f.p, "s", { repo: { root, branch: "feature/ABC-9-login" } });
+    await nod.turnStart(f.p, "s", "t1");
+    await nod.sessionEnd(f.p, "s", "exit");
+    await settle();
+    const sets = events(f).filter((e) => e.type === "task.set");
+    expect(sets.map((e) => e.data)).toEqual([{ task: "EP-003", title: "Precios · HU-010, HU-011", source: "trycore" }]);
+    expect(events(f).find((e) => e.type === "turn.start")!.task).toBe("EP-003");
+  });
+
+  it("legacy: build-state.json; sin slice activo cae a la rama", async () => {
+    const f = withState(new Map([[`${root}/.claude/state/build-state.json`, JSON.stringify({ active_slice: { epica: "EP-007", hus: ["HU-020"] } })]]));
+    const nod = new NodEngine();
+    await nod.sessionStart(f.p, "s", { cwd: root });
+    await nod.sessionEnd(f.p, "s", "exit");
+    await settle();
+    expect(events(f).find((e) => e.type === "task.set")!.data).toEqual({ task: "EP-007", title: "HU-020", source: "trycore" });
+
+    const g = withState(new Map([[`${root}/.claude/state/build-state.json`, JSON.stringify({ active_slice: null })]]));
+    const other = new NodEngine();
+    await other.sessionStart(g.p, "s", { repo: { root, branch: "feature/ABC-9" } });
+    await other.sessionEnd(g.p, "s", "exit");
+    await settle();
+    expect(events(g).find((e) => e.type === "task.set")!.data).toEqual({ task: "ABC-9", source: "branch" });
+  });
+
+  it("sigue al arnés a mitad de sesión: claim, cambio de épica y archive", async () => {
+    const path = `${root}/.claude/state/runtime-projection.json`;
+    const state = new Map<string, string>();
+    const f = withState(state);
+    const nod = new NodEngine();
+    await nod.sessionStart(f.p, "s", { repo: { root } });
+    state.set(path, projection({ epic_code: "EP-001" }));
+    await nod.promptSubmit(f.p, "s", "uno", "user");
+    await nod.promptSubmit(f.p, "s", "dos", "user");
+    state.set(path, projection({ epic_code: "EP-002" }));
+    await nod.promptSubmit(f.p, "s", "tres", "user");
+    state.set(path, projection(null));
+    await nod.promptSubmit(f.p, "s", "cuatro", "user");
+    await nod.sessionEnd(f.p, "s", "exit");
+    await settle();
+    expect(events(f).filter((e) => e.type === "task.set").map((e) => e.data.task)).toEqual(["EP-001", "EP-002", null]);
+    expect(events(f).filter((e) => e.type === "prompt.submit").map((e) => e.task)).toEqual(["EP-001", "EP-001", "EP-002", undefined]);
+  });
+
+  it("no pisa lo que fija el humano: NOD_TASK ni /nod tarea", async () => {
+    const state = new Map([[`${root}/.claude/state/runtime-projection.json`, projection({ epic_code: "EP-003" })]]);
+    const f = withState(state);
+    const nod = new NodEngine();
+    await nod.sessionStart(f.p, "s", { repo: { root } });
+    await nod.runCommand(f.p, "s", "tarea OPS-1");
+    await nod.promptSubmit(f.p, "s", "hola", "user");
+    await nod.sessionEnd(f.p, "s", "exit");
+    await settle();
+    expect(events(f).filter((e) => e.type === "task.set").map((e) => e.data.task)).toEqual(["EP-003", "OPS-1"]);
+    expect(events(f).find((e) => e.type === "prompt.submit")!.task).toBe("OPS-1");
+  });
+});
