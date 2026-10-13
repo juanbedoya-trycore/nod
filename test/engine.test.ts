@@ -276,16 +276,50 @@ describe("tarea desde el arnés de Trycore", () => {
     const nod = new NodEngine();
     await nod.sessionStart(f.p, "s", { repo: { root } });
     state.set(path, projection({ epic_code: "EP-001" }));
-    await nod.promptSubmit(f.p, "s", "uno", "user");
-    await nod.promptSubmit(f.p, "s", "dos", "user");
+    await nod.promptSubmit(f.p, "s", "uno", "composer");
+    await nod.promptSubmit(f.p, "s", "dos", "composer");
     state.set(path, projection({ epic_code: "EP-002" }));
-    await nod.promptSubmit(f.p, "s", "tres", "user");
+    await nod.promptSubmit(f.p, "s", "tres", "composer");
     state.set(path, projection(null));
-    await nod.promptSubmit(f.p, "s", "cuatro", "user");
+    await nod.promptSubmit(f.p, "s", "cuatro", "composer");
     await nod.sessionEnd(f.p, "s", "exit");
     await settle();
     expect(events(f).filter((e) => e.type === "task.set").map((e) => e.data.task)).toEqual(["EP-001", "EP-002", null]);
     expect(events(f).filter((e) => e.type === "prompt.submit").map((e) => e.task)).toEqual(["EP-001", "EP-001", "EP-002", undefined]);
+  });
+
+  it("etiqueta en cuanto esta sesión ejecuta slice-ops, sin esperar al siguiente prompt", async () => {
+    const path = `${root}/.claude/state/runtime-projection.json`;
+    const state = new Map<string, string>();
+    const f = withState(state);
+    const nod = new NodEngine();
+    await nod.sessionStart(f.p, "s", { repo: { root } });
+    await nod.promptSubmit(f.p, "s", "construye la épica", "sdk");
+    await nod.toolCall(f.p, "s", { toolUseId: "t1", tool: "Bash", input: { command: "bash .claude/hooks/build/slice-ops.sh claim --epic EP-007" } });
+    state.set(path, projection({ epic_code: "EP-007" }));
+    await nod.toolResult(f.p, "s", { toolUseId: "t1", tool: "Bash", ok: true, rejected: false, outputChars: 10 });
+    await nod.toolCall(f.p, "s", { toolUseId: "t2", tool: "Bash", input: { command: "node --test" } });
+    await nod.toolResult(f.p, "s", { toolUseId: "t2", tool: "Bash", ok: true, rejected: false, outputChars: 10 });
+    await nod.sessionEnd(f.p, "s", "exit");
+    await settle();
+    const evs = events(f);
+    expect(evs.filter((e) => e.type === "task.set").map((e) => e.data.task)).toEqual(["EP-007"]);
+    const i = evs.findIndex((e) => e.type === "task.set");
+    expect(evs[i - 1]!.type).toBe("tool.result"); // justo tras el slice-ops
+    expect(evs.filter((e) => e.type === "tool.result").map((e) => e.task)).toEqual([undefined, "EP-007"]);
+  });
+
+  it("un prompt automático no adopta el slice que otra sesión del mismo árbol reclamó", async () => {
+    const path = `${root}/.claude/state/runtime-projection.json`;
+    const state = new Map([[path, projection({ epic_code: "EP-001" })]]);
+    const f = withState(state);
+    const nod = new NodEngine();
+    await nod.sessionStart(f.p, "s", { repo: { root } });
+    state.set(path, projection({ epic_code: "EP-002" })); // lo reclamó otra sesión
+    await nod.promptSubmit(f.p, "s", "<task-notification>", "task-notification");
+    await nod.sessionEnd(f.p, "s", "exit");
+    await settle();
+    expect(events(f).filter((e) => e.type === "task.set").map((e) => e.data.task)).toEqual(["EP-001"]);
   });
 
   it("no pisa lo que fija el humano: NOD_TASK ni /nod tarea", async () => {
@@ -294,7 +328,7 @@ describe("tarea desde el arnés de Trycore", () => {
     const nod = new NodEngine();
     await nod.sessionStart(f.p, "s", { repo: { root } });
     await nod.runCommand(f.p, "s", "tarea OPS-1");
-    await nod.promptSubmit(f.p, "s", "hola", "user");
+    await nod.promptSubmit(f.p, "s", "hola", "composer");
     await nod.sessionEnd(f.p, "s", "exit");
     await settle();
     expect(events(f).filter((e) => e.type === "task.set").map((e) => e.data.task)).toEqual(["EP-003", "OPS-1"]);

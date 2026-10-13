@@ -6486,6 +6486,7 @@ var KEYS = {
   privacy: "nod.privacy"
 };
 var URGENT = /* @__PURE__ */ new Set(["turn.end", "session.end", "permission.request", "agent.end"]);
+var PROMPTS_HUMANOS = /* @__PURE__ */ new Set(["composer", "cli", "command", "sdk"]);
 var USAGE = [
   "uso: /nod [estado | tarea [<id> [t\xEDtulo] | fin] | privacidad [completo|redactado|trabajo] | pausa | reanuda | emparejar | aprobadores [quitar <kid>] | lejos | cerca | ayuda]"
 ].join("\n");
@@ -6512,6 +6513,8 @@ var NodEngine = class {
   taskSource;
   /** Raíz del proyecto de la sesión, donde se busca el estado del arnés de Trycore. */
   root;
+  /** Llamadas a Bash de esta sesión que invocan `slice-ops` (al terminar se vuelve a mirar el slice). */
+  sliceOps = /* @__PURE__ */ new Set();
   /** Todo el trabajo va en fila: el adaptador no espera (no retrasa al agente) y el orden se conserva. */
   chain = Promise.resolve();
   /** Esta ejecución del agente (un proceso): `seq` empieza en 1 y es único dentro de ella (Nod v1 §1.3). */
@@ -6546,7 +6549,10 @@ var NodEngine = class {
     });
   }
   async promptSubmit(p, session, text, origin) {
-    await this.guard(p, "prompt.submit", async (now) => [...await this.harnessTask(p, now, session), ...this.norm.promptSubmit(now, session, { text, origin })]);
+    await this.guard(p, "prompt.submit", async (now) => [
+      ...PROMPTS_HUMANOS.has(origin) ? await this.harnessTask(p, now, session) : [],
+      ...this.norm.promptSubmit(now, session, { text, origin })
+    ]);
   }
   async turnStart(p, session, turn, agent) {
     await this.guard(p, "turn.start", async (now) => {
@@ -6570,6 +6576,8 @@ var NodEngine = class {
     });
   }
   async toolCall(p, session, c) {
+    const cmd = c.input?.command;
+    if (/^bash$/i.test(c.tool) && typeof cmd === "string" && /slice-ops/.test(cmd)) this.sliceOps.add(c.toolUseId);
     await this.guard(p, "tool.call", async (now) => this.norm.toolCall(now, session, c));
   }
   async toolCheck(p, session, id, tool, decision, reason, checkMs) {
@@ -6613,7 +6621,11 @@ var NodEngine = class {
     });
   }
   async toolResult(p, session, r) {
-    await this.guard(p, "tool.result", async (now) => this.norm.toolResult(now, session, r));
+    const slice = this.sliceOps.delete(r.toolUseId);
+    await this.guard(p, "tool.result", async (now) => [
+      ...this.norm.toolResult(now, session, r),
+      ...slice ? await this.harnessTask(p, now, session) : []
+    ]);
   }
   async agentSpawn(p, session, a) {
     await this.guard(p, "agent.spawn", async (now) => this.norm.agentSpawn(now, session, a));

@@ -144,8 +144,9 @@ Todos los eventos posteriores llevan `task`.
 (`source: "trycore"`), y `title` lleva el título de la épica y sus historias (`Precios · HU-010, HU-011`). Se lee
 de `<raíz del repo>/.claude/state/runtime-projection.json` (la proyección del hub, modos `runtime` y `dual`) o, si
 no existe, de `.claude/state/build-state.json` (`legacy`); manda el primero que exista. Se mira al empezar la
-sesión y antes de cada prompt, así que sigue a `slice-ops claim`, `open` y `archive`: cuando el slice cambia se
-emite otro `task.set`, y cuando el arnés deja de tener slice activo, uno con `task: null`. Nunca pisa una tarea
+sesión, justo después de cada orden de la sesión que invoca `slice-ops` (`claim`, `open`, `archive`) y antes de
+cada prompt del humano (`composer`, `cli`, `command`, `sdk`; no en los automáticos, para que una sesión inactiva no
+adopte el slice que otra del mismo árbol acaba de reclamar). Cuando el slice cambia se emite otro `task.set`, y cuando el arnés deja de tener slice activo, uno con `task: null`. Nunca pisa una tarea
 fijada con `/nod tarea` o `NOD_TASK`; sí la deducida de la rama. Se lee el estado del árbol de la sesión, no el
 del clon principal: en un frente paralelo cada worktree tiene su slice.
 

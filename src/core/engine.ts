@@ -28,6 +28,9 @@ const KEYS = {
 /** Tipos que se entregan sin esperar a la ventana del lote. */
 const URGENT = new Set(["turn.end", "session.end", "permission.request", "agent.end"]);
 
+/** Prompts que escribe (o lanza) el humano; los automáticos (`task-notification`, `queue`…) no vuelven a mirar el slice. */
+const PROMPTS_HUMANOS = new Set(["composer", "cli", "command", "sdk"]);
+
 export const USAGE = [
   "uso: /nod [estado | tarea [<id> [título] | fin] | privacidad [completo|redactado|trabajo] | pausa | reanuda | emparejar | aprobadores [quitar <kid>] | lejos | cerca | ayuda]",
 ].join("\n");
@@ -72,6 +75,8 @@ export class NodEngine {
   private taskSource: string | undefined;
   /** Raíz del proyecto de la sesión, donde se busca el estado del arnés de Trycore. */
   private root: string | undefined;
+  /** Llamadas a Bash de esta sesión que invocan `slice-ops` (al terminar se vuelve a mirar el slice). */
+  private readonly sliceOps = new Set<string>();
   /** Todo el trabajo va en fila: el adaptador no espera (no retrasa al agente) y el orden se conserva. */
   private chain: Promise<void> = Promise.resolve();
   /** Esta ejecución del agente (un proceso): `seq` empieza en 1 y es único dentro de ella (Nod v1 §1.3). */
@@ -112,8 +117,13 @@ export class NodEngine {
   }
 
   async promptSubmit(p: Platform, session: string, text: string, origin: string): Promise<void> {
-    // El slice puede cambiar a mitad de sesión (`slice-ops claim`, `open`, `archive`): se vuelve a mirar en cada prompt.
-    await this.guard(p, "prompt.submit", async (now) => [...(await this.harnessTask(p, now, session)), ...this.norm.promptSubmit(now, session, { text, origin })]);
+    // El slice puede cambiar entre prompts del humano: se vuelve a mirar. Los prompts automáticos (avisos de
+    // tareas en segundo plano, colas) no: a una sesión inactiva le llegaban y adoptaba el slice que otra sesión
+    // del mismo árbol acababa de reclamar (sandbox hello-world).
+    await this.guard(p, "prompt.submit", async (now) => [
+      ...(PROMPTS_HUMANOS.has(origin) ? await this.harnessTask(p, now, session) : []),
+      ...this.norm.promptSubmit(now, session, { text, origin }),
+    ]);
   }
 
   async turnStart(p: Platform, session: string, turn: string, agent?: string): Promise<void> {
@@ -141,6 +151,9 @@ export class NodEngine {
   }
 
   async toolCall(p: Platform, session: string, c: ToolCallInfo): Promise<void> {
+    // Un `slice-ops` (claim, archive…) cambia el slice a mitad de turno: se vuelve a mirar al terminar esa orden.
+    const cmd = (c.input as { command?: unknown } | undefined)?.command;
+    if (/^bash$/i.test(c.tool) && typeof cmd === "string" && /slice-ops/.test(cmd)) this.sliceOps.add(c.toolUseId);
     await this.guard(p, "tool.call", async (now) => this.norm.toolCall(now, session, c));
   }
 
@@ -191,7 +204,11 @@ export class NodEngine {
   }
 
   async toolResult(p: Platform, session: string, r: ToolResultInfo): Promise<void> {
-    await this.guard(p, "tool.result", async (now) => this.norm.toolResult(now, session, r));
+    const slice = this.sliceOps.delete(r.toolUseId);
+    await this.guard(p, "tool.result", async (now) => [
+      ...this.norm.toolResult(now, session, r),
+      ...(slice ? await this.harnessTask(p, now, session) : []),
+    ]);
   }
 
   async agentSpawn(p: Platform, session: string, a: Parameters<Normalizer["agentSpawn"]>[2]): Promise<void> {
