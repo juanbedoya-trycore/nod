@@ -1,6 +1,7 @@
 // Nod, sin el agente: recibe lo que pasa en la sesión (ya en nombres neutros), lo normaliza a Nod v1, aplica
 // la privacidad, lo numera y lo entrega a cada destino. Cada adaptador (hosts/claude, …) llama a estos métodos
 // con su Platform. Los métodos públicos nunca lanzan: un fallo de Nod no puede romper la sesión.
+import { accountFor } from "./account.js";
 import { resolveConfig, configPath, loadTokenFiles } from "./config.js";
 import type { Config, NodEnv } from "./config.js";
 import { ControlChannel } from "./control/channel.js";
@@ -207,7 +208,9 @@ export class NodEngine {
     const slice = this.sliceOps.delete(r.toolUseId);
     await this.guard(p, "tool.result", async (now) => [
       ...this.norm.toolResult(now, session, r),
-      ...(slice ? await this.harnessTask(p, now, session) : []),
+      // Tras el archive el slice desaparece, pero lo que sigue en el turno (la reflexión) es trabajo de esa
+      // épica: se conserva hasta el siguiente prompt del humano.
+      ...(slice ? await this.harnessTask(p, now, session, true) : []),
     ]);
   }
 
@@ -313,6 +316,7 @@ export class NodEngine {
     const s: Source = { instance: rt.config.instance, run, host: rt.info.host, profile: rt.info.profile, privacy };
     if (rt.info.hostVersion !== undefined) s.host_version = rt.info.hostVersion;
     if (rt.info.machine !== undefined && privacy === "completo") s.machine = rt.info.machine;
+    if (rt.info.account !== undefined) s.account = accountFor(rt.info.account, privacy);
     return s;
   }
 
@@ -323,12 +327,13 @@ export class NodEngine {
 
   /**
    * La tarea según el slice activo del arnés de Trycore, si cambió. No pisa lo que fijó el humano (`/nod tarea`,
-   * NOD_TASK); sí la rama, que es una pista más débil. Si el arnés deja de tener slice, cierra la tarea que puso.
+   * NOD_TASK); sí la rama, que es una pista más débil. Si el arnés deja de tener slice, cierra la tarea que puso,
+   * salvo con `keep`: entonces la conserva (un archive a mitad de turno) y la cierra el siguiente prompt del humano.
    */
-  private async harnessTask(p: Platform, now: number, session: string): Promise<Draft[]> {
+  private async harnessTask(p: Platform, now: number, session: string, keep = false): Promise<Draft[]> {
     if (this.taskSource === "command" || this.taskSource === "env" || this.root === undefined) return [];
     const slice = await trycoreSlice(p.read, this.root);
-    if (slice === undefined) return this.taskSource === "trycore" ? this.setTask(now, session, undefined, undefined, "trycore") : [];
+    if (slice === undefined) return this.taskSource === "trycore" && !keep ? this.setTask(now, session, undefined, undefined, "trycore") : [];
     if (this.taskSource === "trycore" && slice.task === this.norm.task) return [];
     return this.setTask(now, session, slice.task, slice.title, "trycore");
   }
@@ -505,7 +510,7 @@ export class NodEngine {
     const tok = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} M` : n >= 1000 ? `${Math.round(n / 1000)} k` : String(n));
     const lines = [
       rt.config.enabled ? (rt.paused ? "en pausa (los eventos esperan en la cola: /nod reanuda)" : "observando") : "desactivado (NOD_OFF=1)",
-      `  instancia ${rt.config.instance} · perfil ${rt.info.profile} · privacidad ${rt.privacy}${this.norm.task ? ` · tarea ${this.norm.task}` : ""}`,
+      `  instancia ${rt.config.instance} · perfil ${rt.info.profile}${rt.info.account ? ` · cuenta ${rt.info.account.email}` : ""} · privacidad ${rt.privacy}${this.norm.task ? ` · tarea ${this.norm.task}` : ""}`,
       `  configuración: ${rt.config.source}`,
       "  destinos:",
     ];

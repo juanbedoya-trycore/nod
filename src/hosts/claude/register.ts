@@ -8,6 +8,7 @@
 import { COMMAND_DESCRIPTION, NodEngine } from "../../core/engine.js";
 import type { NodEnv } from "../../core/config.js";
 import type { HostInfo, Platform } from "../../core/platform.js";
+import { claudeAccount } from "../../core/account.js";
 import type { SessionInfo, UsageSnapshot } from "../../core/normalize.js";
 import { usageOf } from "../../core/events.js";
 import { branchFromHead } from "../../core/normalize.js";
@@ -73,7 +74,19 @@ async function readInfo($: Engine): Promise<HostInfo> {
   const v = typeof version === "string" ? version : version?.version;
   if (typeof v === "string") out.hostVersion = v;
   if (machine !== "") out.machine = machine;
+  const account = await readAccount($);
+  if (account !== undefined) out.account = account;
   return out;
+}
+
+/** La cuenta del perfil: `<CLAUDE_CONFIG_DIR>/.claude.json`, o `~/.claude.json` en el perfil por defecto. */
+async function readAccount($: Engine) {
+  const dir = ((await $.env.get("CLAUDE_CONFIG_DIR")) ?? "").replace(/\/+$/, "");
+  const home = await $.env.get("HOME");
+  const path = dir !== "" ? `${dir}/.claude.json` : home ? `${home}/.claude.json` : undefined;
+  if (path === undefined) return undefined;
+  const text = await Promise.resolve().then(() => $.fs.read(path)).catch(() => undefined);
+  return text === undefined ? undefined : claudeAccount(String(text));
 }
 
 async function mkdirFor($: Engine, path: string): Promise<void> {

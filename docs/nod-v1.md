@@ -45,7 +45,8 @@ ella `seq` empieza en 1 y crece de uno en uno. La identidad de un evento es (`so
 {
   "nod": 1,
   "source": { "instance": "personal-3fa9c2d1", "run": "9b1e44a0", "host": "claude", "host_version": "2.1.296",
-              "machine": "mbp", "profile": "personal", "privacy": "completo" },
+              "machine": "mbp", "profile": "personal",
+              "account": { "email": "ana@acme.com", "name": "Ana Ruiz", "org": "Acme" }, "privacy": "completo" },
   "events": [ { "seq": 1, "ts": 1791838903681, "type": "session.start", "session": "6d4b…", "data": { } } ]
 }
 ```
@@ -59,6 +60,7 @@ ella `seq` empieza en 1 y crece de uno en uno. La identidad de un evento es (`so
 | `source.host_version` | versión del agente, *opc.* |
 | `source.machine` | nombre corto de la máquina, *opc.*; solo con privacidad `completo` |
 | `source.profile` | perfil del agente (el nombre de su directorio de configuración) |
+| `source.account` | cuenta con la que se inició sesión en el agente, *opc.*: `email`, `name` y `org` (en Claude Code, la del `oauthAccount` del `.claude.json` del perfil; con suscripción de empresa, la de quien lo usa). Con `redactado`, `email` y `org` van como hash `h-xxxxxxxx` y no va `name`; con `trabajo`, sin `name`. OpenCode no la emite |
 | `source.privacy` | perfil de privacidad aplicado a estos eventos (§4) |
 
 ## 3. Eventos
@@ -124,7 +126,7 @@ Tiempos en `*_ms`; tokens en `usage` = `{ "input", "output", "cache_read", "cach
 | Perfil | Qué sale | Destinos |
 | --- | --- | --- |
 | `completo` | todo, también `text`, `answer`, `input`, rutas y `machine` | cualquiera |
-| `redactado` | sin `text`, `answer`, `input`, `description`, `title`, `cwd`, `links`, `remote_session`, `repo.root`, `repo.remote`, el `reason` del permiso ni `machine`. Los identificadores que escribe el usuario (tarea, rama, comandos propios, tipos de subagente propios, servidores MCP) van como hash `h-xxxxxxxx`: se puede agrupar, no leer. Quedan tipos, tiempos, tokens, nombres de tool, `verb`, `repo.name` y longitudes | cualquiera |
+| `redactado` | sin `text`, `answer`, `input`, `description`, `title`, `cwd`, `links`, `remote_session`, `repo.root`, `repo.remote`, el `reason` del permiso, `machine` ni `account.name`. Los identificadores que escribe el usuario (tarea, rama, comandos propios, tipos de subagente propios, servidores MCP) van como hash `h-xxxxxxxx`: se puede agrupar, no leer. Quedan tipos, tiempos, tokens, nombres de tool, `verb`, `repo.name` y longitudes | cualquiera |
 | `trabajo` | como `redactado`, pero con los identificadores legibles (no salen de la máquina) | solo locales: ficheros y URLs de `localhost`, `127.0.0.1` o `::1` |
 
 - El perfil se aplica **antes** de encolar. Si se endurece (por `/nod privacidad` o al arrancar con otro
@@ -146,7 +148,7 @@ de `<raíz del repo>/.claude/state/runtime-projection.json` (la proyección del 
 no existe, de `.claude/state/build-state.json` (`legacy`); manda el primero que exista. Se mira al empezar la
 sesión, justo después de cada orden de la sesión que invoca `slice-ops` (`claim`, `open`, `archive`) y antes de
 cada prompt del humano (`composer`, `cli`, `command`, `sdk`; no en los automáticos, para que una sesión inactiva no
-adopte el slice que otra del mismo árbol acaba de reclamar). Cuando el slice cambia se emite otro `task.set`, y cuando el arnés deja de tener slice activo, uno con `task: null`. Nunca pisa una tarea
+adopte el slice que otra del mismo árbol acaba de reclamar). Cuando el slice cambia se emite otro `task.set`, y cuando el arnés deja de tener slice activo, uno con `task: null`; si fue tras un `slice-ops` de la propia sesión (el `archive`), la épica se conserva hasta el siguiente prompt del humano, para que la reflexión que sigue al archivo cuente en ella. Nunca pisa una tarea
 fijada con `/nod tarea` o `NOD_TASK`; sí la deducida de la rama. Se lee el estado del árbol de la sesión, no el
 del clon principal: en un frente paralelo cada worktree tiene su slice.
 

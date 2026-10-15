@@ -2,6 +2,7 @@ export * from "./events.js";
 export * from "./config.js";
 export * from "./normalize.js";
 export * from "./privacy.js";
+export * from "./account.js";
 export * from "./queue.js";
 export * from "./outbox.js";
 export * from "./platform.js";

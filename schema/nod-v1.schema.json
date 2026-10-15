@@ -17,6 +17,15 @@
         "host_version": { "type": "string" },
         "machine": { "type": "string" },
         "profile": { "type": "string", "minLength": 1 },
+        "account": {
+          "type": "object",
+          "required": ["email"],
+          "properties": {
+            "email": { "type": "string", "minLength": 1 },
+            "name": { "type": "string" },
+            "org": { "type": "string" }
+          }
+        },
         "privacy": { "enum": ["completo", "redactado", "trabajo"] }
       }
     },

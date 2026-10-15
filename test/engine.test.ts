@@ -309,6 +309,27 @@ describe("tarea desde el arnés de Trycore", () => {
     expect(evs.filter((e) => e.type === "tool.result").map((e) => e.task)).toEqual([undefined, "EP-007"]);
   });
 
+  it("tras el archive conserva la épica para la reflexión y la cierra el siguiente prompt del humano", async () => {
+    const path = `${root}/.claude/state/runtime-projection.json`;
+    const state = new Map([[path, projection({ epic_code: "EP-003" })]]);
+    const f = withState(state);
+    const nod = new NodEngine();
+    await nod.sessionStart(f.p, "s", { repo: { root } });
+    await nod.promptSubmit(f.p, "s", "cierra EP-003 y reflexiona", "sdk");
+    await nod.toolCall(f.p, "s", { toolUseId: "t1", tool: "Bash", input: { command: "bash .claude/hooks/build/slice-ops.sh archive --epic EP-003" } });
+    state.set(path, projection(null));
+    await nod.toolResult(f.p, "s", { toolUseId: "t1", tool: "Bash", ok: true, rejected: false, outputChars: 10 });
+    await nod.toolCall(f.p, "s", { toolUseId: "t2", tool: "Bash", input: { command: "bash .claude/hooks/build/slice-ops.sh chrono-outcome --epic EP-003" } });
+    await nod.toolResult(f.p, "s", { toolUseId: "t2", tool: "Bash", ok: true, rejected: false, outputChars: 10 });
+    await nod.promptSubmit(f.p, "s", "otra cosa", "composer");
+    await nod.sessionEnd(f.p, "s", "exit");
+    await settle();
+    const evs = events(f);
+    expect(evs.filter((e) => e.type === "task.set").map((e) => e.data.task)).toEqual(["EP-003", null]);
+    expect(evs.filter((e) => e.type === "tool.result").map((e) => e.task)).toEqual(["EP-003", "EP-003"]);
+    expect(evs.filter((e) => e.type === "prompt.submit").map((e) => e.task)).toEqual(["EP-003", undefined]);
+  });
+
   it("un prompt automático no adopta el slice que otra sesión del mismo árbol reclamó", async () => {
     const path = `${root}/.claude/state/runtime-projection.json`;
     const state = new Map([[path, projection({ epic_code: "EP-001" })]]);

@@ -1,5 +1,7 @@
 // Nod v1 (docs/nod-v1.md): los eventos que emite Nod, sin nada del agente ni del consumidor.
 
+import type { Account } from "./account.js";
+
 export const NOD_VERSION = 1;
 
 export type Privacy = "completo" | "redactado" | "trabajo";
@@ -21,6 +23,7 @@ export interface Source {
   host_version?: string;
   machine?: string;
   profile: string;
+  account?: Account;
   privacy: Privacy;
 }
 

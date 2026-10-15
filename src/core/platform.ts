@@ -1,5 +1,6 @@
 // Lo que el núcleo necesita del agente que lo aloja (Claude Code, OpenCode…). Cada adaptador construye una
 // `Platform` con lo que le da su motor; el núcleo no conoce a ninguno.
+import type { Account } from "./account.js";
 import type { NodEnv } from "./config.js";
 
 export interface HttpResponse {
@@ -12,12 +13,13 @@ export interface Timer {
   cancel: () => void;
 }
 
-/** Quién emite: agente, versión, máquina y perfil. */
+/** Quién emite: agente, versión, máquina, perfil y la cuenta con la que se inició sesión. */
 export interface HostInfo {
   host: string;
   hostVersion?: string | undefined;
   machine?: string | undefined;
   profile: string;
+  account?: Account | undefined;
 }
 
 export interface Platform {

@@ -134,6 +134,32 @@ describe("sesión interactiva real (claude 2.1.296)", async () => {
   });
 });
 
+describe("cuenta del perfil", () => {
+  const CLAUDE_JSON = "/Users/dev/.local/state/ws/claude/personal/.claude.json";
+  const readable = { [CLAUDE_JSON]: JSON.stringify({ oauthAccount: { emailAddress: "ana@acme.com", fullName: "Ana Ruiz", organizationName: "Acme" } }) };
+
+  it("va en source con la sesión iniciada en el perfil", async () => {
+    const r = await replay(FIXTURE, { readable });
+    for (const env of r.envelopes) expect(validate(env), JSON.stringify(validate.errors)).toBe(true);
+    expect(r.envelopes.every((e) => e.source.account?.email === "ana@acme.com")).toBe(true);
+    expect(r.envelopes[0]!.source.account).toEqual({ email: "ana@acme.com", name: "Ana Ruiz", org: "Acme" });
+  });
+
+  it("redactado: el correo y la organización como hash, sin nombre", async () => {
+    const r = await replay(FIXTURE, { readable, env: { NOD_PRIVACY: "redactado" } });
+    for (const env of r.envelopes) expect(validate(env), JSON.stringify(validate.errors)).toBe(true);
+    const all = JSON.stringify(r.envelopes);
+    expect(all).not.toContain("ana@acme.com");
+    expect(all).not.toContain("Ana Ruiz");
+    expect(r.envelopes[0]!.source.account?.email).toMatch(/^h-[0-9a-f]{8}$/);
+  });
+
+  it("sin .claude.json no hay cuenta", async () => {
+    const r = await replay(FIXTURE);
+    expect(r.envelopes.some((e) => "account" in e.source)).toBe(false);
+  });
+});
+
 describe("privacidad", () => {
   it("redactado: sin texto, rutas, entradas de tools ni máquina", async () => {
     const r = await replay(FIXTURE, { env: { NOD_PRIVACY: "redactado" } });

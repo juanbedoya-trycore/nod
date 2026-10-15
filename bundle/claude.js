@@ -1,35 +1,5 @@
 // Nod para Claude Code. Generado por scripts/bundle.mjs desde src/: no editar a mano.
 
-// src/core/events.ts
-var NOD_VERSION = 1;
-var PRIVACY_LEVELS = ["completo", "redactado", "trabajo"];
-function usageOf(u) {
-  if (u === null || typeof u !== "object") return void 0;
-  const o = u;
-  const n = (v) => typeof v === "number" && Number.isFinite(v) ? v : 0;
-  const out = {
-    input: n(o.input_tokens ?? o.input),
-    output: n(o.output_tokens ?? o.output),
-    cache_read: n(o.cache_read_input_tokens ?? o.cache_read),
-    cache_write: n(o.cache_creation_input_tokens ?? o.cache_write)
-  };
-  if (typeof o.model === "string") out.model = o.model;
-  return out;
-}
-function addUsage(a, b) {
-  if (b === void 0) return a;
-  const out = {
-    input: a.input + b.input,
-    output: a.output + b.output,
-    cache_read: a.cache_read + b.cache_read,
-    cache_write: a.cache_write + b.cache_write
-  };
-  const model = b.model ?? a.model;
-  if (model !== void 0) out.model = model;
-  return out;
-}
-var ZERO_USAGE = { input: 0, output: 0, cache_read: 0, cache_write: 0 };
-
 // src/core/privacy.ts
 var TEXT_FIELDS = ["text", "answer", "input", "description", "cwd", "title", "links", "remote_session"];
 var FREE_REASON = /* @__PURE__ */ new Set(["permission.request"]);
@@ -132,6 +102,69 @@ function isLocalUrl(url) {
     return false;
   }
 }
+
+// src/core/account.ts
+var str = (v) => typeof v === "string" && v.trim() !== "" ? v.trim() : void 0;
+function claudeAccount(text) {
+  let doc;
+  try {
+    doc = JSON.parse(text);
+  } catch {
+    return void 0;
+  }
+  const a = doc !== null && typeof doc === "object" ? doc.oauthAccount : void 0;
+  if (a === null || typeof a !== "object") return void 0;
+  const o = a;
+  const email = str(o.emailAddress);
+  if (email === void 0) return void 0;
+  const out = { email: email.toLowerCase() };
+  const name = str(o.fullName) ?? str(o.displayName);
+  if (name !== void 0) out.name = name;
+  const org = str(o.organizationName);
+  if (org !== void 0) out.org = org;
+  return out;
+}
+function accountFor(a, p) {
+  if (p === "redactado") {
+    const out2 = { email: `h-${shortHash(a.email)}` };
+    if (a.org !== void 0) out2.org = `h-${shortHash(a.org)}`;
+    return out2;
+  }
+  const out = { email: a.email };
+  if (p === "completo" && a.name !== void 0) out.name = a.name;
+  if (a.org !== void 0) out.org = a.org;
+  return out;
+}
+
+// src/core/events.ts
+var NOD_VERSION = 1;
+var PRIVACY_LEVELS = ["completo", "redactado", "trabajo"];
+function usageOf(u) {
+  if (u === null || typeof u !== "object") return void 0;
+  const o = u;
+  const n = (v) => typeof v === "number" && Number.isFinite(v) ? v : 0;
+  const out = {
+    input: n(o.input_tokens ?? o.input),
+    output: n(o.output_tokens ?? o.output),
+    cache_read: n(o.cache_read_input_tokens ?? o.cache_read),
+    cache_write: n(o.cache_creation_input_tokens ?? o.cache_write)
+  };
+  if (typeof o.model === "string") out.model = o.model;
+  return out;
+}
+function addUsage(a, b) {
+  if (b === void 0) return a;
+  const out = {
+    input: a.input + b.input,
+    output: a.output + b.output,
+    cache_read: a.cache_read + b.cache_read,
+    cache_write: a.cache_write + b.cache_write
+  };
+  const model = b.model ?? a.model;
+  if (model !== void 0) out.model = model;
+  return out;
+}
+var ZERO_USAGE = { input: 0, output: 0, cache_read: 0, cache_write: 0 };
 
 // src/core/config.ts
 var HOLD_MS_DEFAULT = 2e4;
@@ -5075,8 +5108,8 @@ var base64EncodeOutputStream = function() {
   };
   return _this;
 };
-var base64DecodeInputStream = function(str3) {
-  const _str = str3;
+var base64DecodeInputStream = function(str4) {
+  const _str = str4;
   let _pos = 0;
   let _buffer = 0;
   let _buflen = 0;
@@ -5398,7 +5431,7 @@ function basename(p) {
   const parts = p.split(/[\\/]/).filter((x) => x !== "");
   return parts[parts.length - 1] ?? p;
 }
-function str(v) {
+function str2(v) {
   return typeof v === "string" && v !== "" ? v : void 0;
 }
 function absolute(p, cwd) {
@@ -5418,15 +5451,15 @@ function linksOf(tool, input, resultText, isError, cwd) {
   };
   const inp = input !== null && typeof input === "object" ? input : {};
   if (tool === "Write") {
-    const p = str(inp.file_path);
+    const p = str2(inp.file_path);
     if (p !== void 0) add({ kind: "file", name: basename(p), path: p });
   }
   if (tool === "Edit" || tool === "MultiEdit" || tool === "NotebookEdit") {
-    const p = str(inp.file_path) ?? str(inp.notebook_path);
+    const p = str2(inp.file_path) ?? str2(inp.notebook_path);
     if (p !== void 0 && DOC_RE.test(p)) add({ kind: "file", name: basename(p), path: p });
   }
   if (tool === "Bash") {
-    const cmd = str(inp.command) ?? "";
+    const cmd = str2(inp.command) ?? "";
     for (const m of cmd.matchAll(BASH_OUT_RE)) {
       const p = m[2] !== void 0 && DOC_RE.test(m[2]) ? absolute(m[2], cwd) : void 0;
       if (p !== void 0) add({ kind: "file", name: basename(p), path: p });
@@ -6449,7 +6482,7 @@ var Outbox = class {
 
 // src/core/trycore.ts
 var TRYCORE_STATE = [".claude/state/runtime-projection.json", ".claude/state/build-state.json"];
-var str2 = (v) => typeof v === "string" && v.trim() !== "" ? v.trim() : void 0;
+var str3 = (v) => typeof v === "string" && v.trim() !== "" ? v.trim() : void 0;
 function sliceFrom(text) {
   let doc;
   try {
@@ -6461,10 +6494,10 @@ function sliceFrom(text) {
   const s = doc.active_slice;
   if (s === null || typeof s !== "object") return null;
   const sl = s;
-  const task = str2(sl.epic_code) ?? str2(sl.epica);
+  const task = str3(sl.epic_code) ?? str3(sl.epica);
   if (task === void 0) return null;
-  const hus = (Array.isArray(sl.hus) ? sl.hus : []).map((h) => str2(h) ?? (h !== null && typeof h === "object" ? str2(h.code) ?? str2(h.id) : void 0)).filter((h) => h !== void 0);
-  const title = [str2(sl.epic_title), hus.length > 0 ? hus.join(", ") : void 0].filter((t) => t !== void 0).join(" \xB7 ");
+  const hus = (Array.isArray(sl.hus) ? sl.hus : []).map((h) => str3(h) ?? (h !== null && typeof h === "object" ? str3(h.code) ?? str3(h.id) : void 0)).filter((h) => h !== void 0);
+  const title = [str3(sl.epic_title), hus.length > 0 ? hus.join(", ") : void 0].filter((t) => t !== void 0).join(" \xB7 ");
   return title === "" ? { task } : { task, title };
 }
 async function trycoreSlice(read, root) {
@@ -6624,7 +6657,9 @@ var NodEngine = class {
     const slice = this.sliceOps.delete(r.toolUseId);
     await this.guard(p, "tool.result", async (now) => [
       ...this.norm.toolResult(now, session, r),
-      ...slice ? await this.harnessTask(p, now, session) : []
+      // Tras el archive el slice desaparece, pero lo que sigue en el turno (la reflexión) es trabajo de esa
+      // épica: se conserva hasta el siguiente prompt del humano.
+      ...slice ? await this.harnessTask(p, now, session, true) : []
     ]);
   }
   async agentSpawn(p, session, a) {
@@ -6715,6 +6750,7 @@ var NodEngine = class {
     const s = { instance: rt.config.instance, run, host: rt.info.host, profile: rt.info.profile, privacy };
     if (rt.info.hostVersion !== void 0) s.host_version = rt.info.hostVersion;
     if (rt.info.machine !== void 0 && privacy === "completo") s.machine = rt.info.machine;
+    if (rt.info.account !== void 0) s.account = accountFor(rt.info.account, privacy);
     return s;
   }
   setTask(now, session, task, title, source) {
@@ -6723,12 +6759,13 @@ var NodEngine = class {
   }
   /**
    * La tarea según el slice activo del arnés de Trycore, si cambió. No pisa lo que fijó el humano (`/nod tarea`,
-   * NOD_TASK); sí la rama, que es una pista más débil. Si el arnés deja de tener slice, cierra la tarea que puso.
+   * NOD_TASK); sí la rama, que es una pista más débil. Si el arnés deja de tener slice, cierra la tarea que puso,
+   * salvo con `keep`: entonces la conserva (un archive a mitad de turno) y la cierra el siguiente prompt del humano.
    */
-  async harnessTask(p, now, session) {
+  async harnessTask(p, now, session, keep = false) {
     if (this.taskSource === "command" || this.taskSource === "env" || this.root === void 0) return [];
     const slice = await trycoreSlice(p.read, this.root);
-    if (slice === void 0) return this.taskSource === "trycore" ? this.setTask(now, session, void 0, void 0, "trycore") : [];
+    if (slice === void 0) return this.taskSource === "trycore" && !keep ? this.setTask(now, session, void 0, void 0, "trycore") : [];
     if (this.taskSource === "trycore" && slice.task === this.norm.task) return [];
     return this.setTask(now, session, slice.task, slice.title, "trycore");
   }
@@ -6896,7 +6933,7 @@ var NodEngine = class {
     const tok = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(1)} M` : n >= 1e3 ? `${Math.round(n / 1e3)} k` : String(n);
     const lines = [
       rt.config.enabled ? rt.paused ? "en pausa (los eventos esperan en la cola: /nod reanuda)" : "observando" : "desactivado (NOD_OFF=1)",
-      `  instancia ${rt.config.instance} \xB7 perfil ${rt.info.profile} \xB7 privacidad ${rt.privacy}${this.norm.task ? ` \xB7 tarea ${this.norm.task}` : ""}`,
+      `  instancia ${rt.config.instance} \xB7 perfil ${rt.info.profile}${rt.info.account ? ` \xB7 cuenta ${rt.info.account.email}` : ""} \xB7 privacidad ${rt.privacy}${this.norm.task ? ` \xB7 tarea ${this.norm.task}` : ""}`,
       `  configuraci\xF3n: ${rt.config.source}`,
       "  destinos:"
     ];
@@ -7026,7 +7063,17 @@ async function readInfo($) {
   const v = typeof version === "string" ? version : version?.version;
   if (typeof v === "string") out.hostVersion = v;
   if (machine !== "") out.machine = machine;
+  const account = await readAccount($);
+  if (account !== void 0) out.account = account;
   return out;
+}
+async function readAccount($) {
+  const dir = (await $.env.get("CLAUDE_CONFIG_DIR") ?? "").replace(/\/+$/, "");
+  const home = await $.env.get("HOME");
+  const path = dir !== "" ? `${dir}/.claude.json` : home ? `${home}/.claude.json` : void 0;
+  if (path === void 0) return void 0;
+  const text = await Promise.resolve().then(() => $.fs.read(path)).catch(() => void 0);
+  return text === void 0 ? void 0 : claudeAccount(String(text));
 }
 async function mkdirFor($, path) {
   const dir = path.slice(0, path.lastIndexOf("/"));
