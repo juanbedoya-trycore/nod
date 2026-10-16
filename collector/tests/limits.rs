@@ -117,3 +117,74 @@ fn desde_el_fichero_y_desde_la_db() {
     nod_collector::import_file(&mut st, &common::fixture()).unwrap();
     assert_eq!(st.latest_limit(None).unwrap().as_ref(), Some(&s));
 }
+
+#[test]
+fn por_sesion_contexto_y_limites_de_su_cuenta() {
+    use nod_collector::limits::{for_session, session_from_file, tmux_session};
+    let r5 = "2026-10-12T23:00:00.000Z";
+    let r7 = "2026-10-19T10:00:00.000Z";
+    // El contexto es de la sesión; los límites, del `usage` más reciente de su instancia.
+    let ctx = UsageSnapshot {
+        ts: 10,
+        context: Some(j!({ "percent": 63, "tokens": 630000, "window": 1000000 })),
+        ..snap(20.0, 5.0, r5, r7)
+    };
+    let newer = UsageSnapshot {
+        ts: 20,
+        session: "otra".into(),
+        ..snap(37.0, 12.0, r5, r7)
+    };
+    let s = for_session(ctx.clone(), Some(newer.clone()));
+    assert_eq!((s.session.as_str(), s.ts), ("s", 20));
+    assert_eq!(
+        tmux_session(Some(&s), now()),
+        "#[fg=yellow]ctx 63%#[fg=default] · 5h 37% ↻2h10 · 7d 12%"
+    );
+    // MiniMax (`limits: []`) u OpenCode (sin el campo) no gastan los límites de la cuenta: no los toman
+    // prestados de otra sesión y queda solo el contexto. Sin datos, nada.
+    for limits in [j!([]), serde_json::Value::Null] {
+        let third = UsageSnapshot {
+            limits,
+            ..ctx.clone()
+        };
+        let s = for_session(third.clone(), Some(newer.clone()));
+        assert_eq!(s, third);
+        assert_eq!(
+            tmux_session(Some(&s), now()),
+            "#[fg=yellow]ctx 63%#[fg=default]"
+        );
+    }
+    assert_eq!(tmux_session(None, now()), "");
+    // Un `limits: []` tampoco tapa los de la cuenta en la barra general.
+    let dir = common::tempdir("limites-vacios");
+    let f = dir.join("events.jsonl");
+    let empty = j!({ "nod": 1, "source": { "instance": "personal-c1254137", "run": "0a0b0c0d", "host": "claude", "profile": "personal", "privacy": "completo" },
+        "events": [{ "seq": 1, "ts": 1791840817533_i64, "type": "usage", "session": "mm", "data": { "limits": [], "context": { "percent": 9 } } }] });
+    std::fs::write(
+        &f,
+        common::fixture_lines().join("\n") + "\n" + &empty.to_string() + "\n",
+    )
+    .unwrap();
+    assert_eq!(
+        latest_from_file(&f, None).unwrap().unwrap().ts,
+        1791840817532
+    );
+
+    // Del fichero y de la db sale la misma sesión.
+    let dir = common::tempdir("limites-sesion");
+    let f = dir.join("events.jsonl");
+    std::fs::write(&f, common::fixture_lines().join("\n") + "\n").unwrap();
+    let last = latest_from_file(&f, None).unwrap().expect("límites");
+    let from_file = session_from_file(&f, &last.session)
+        .unwrap()
+        .expect("sesión");
+    assert_eq!(from_file.session, last.session);
+    assert!(from_file.context.is_some());
+    assert_eq!(session_from_file(&f, "no-existe").unwrap(), None);
+    let mut st = Store::open_memory().unwrap();
+    nod_collector::import_file(&mut st, &common::fixture()).unwrap();
+    assert_eq!(
+        st.latest_session_usage(&last.session).unwrap().as_ref(),
+        Some(&from_file)
+    );
+}

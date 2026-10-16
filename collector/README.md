@@ -9,7 +9,7 @@ uso para la barra de tmux.
 nod-collector serve  [--listen 127.0.0.1:8787] [--db <ruta>] [--token-file <ruta>]
 nod-collector import <fichero.jsonl>... [--db <ruta>]
 nod-collector report [--task T] [--session S] [--since 7d|24h|<fecha>] [--json] [--db <ruta>]
-nod-collector limits [--from-file <events.jsonl>] [--db <ruta>] [--instance I] [--format tmux|text|json]
+nod-collector limits [--from-file <events.jsonl>] [--db <ruta>] [--instance I | --session S] [--format tmux|text|json]
 ```
 
 La db por defecto es `$XDG_STATE_HOME/nod/nod.db`, o `~/.local/state/nod/nod.db`.
@@ -33,7 +33,9 @@ UTC). `--json` da la misma estructura que la tabla, con nombres de campo estable
 eventos desde el final (sin collector). `tmux` da `5h 37% ↻2h10 · 7d 12%`: rojo (`#[fg=red]`) desde el 80 %,
 amarillo desde el 50 % (sobre el porcentaje redondeado que se ve) y `↻` con lo que falta para el `resets_at`
 del límite de 5 h. Un límite cuya renovación ya pasó no se muestra: su porcentaje es de la ventana anterior. Sin
-datos, la salida queda vacía y sale con 0.
+datos, la salida queda vacía y sale con 0. Con `--session S`, `tmux` antepone el contexto de esa sesión
+(`ctx 63% · 5h 18% ↻2h10 · 7d 24%`, mismos colores) y los límites salen de su instancia, es decir, de su cuenta:
+sirve para mostrar en tmux los datos del Claude que corre en un pane concreto.
 
 ## Cómo se calcula cada métrica
 

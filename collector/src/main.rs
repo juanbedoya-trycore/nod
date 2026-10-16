@@ -12,7 +12,7 @@ Uso:
   nod-collector serve  [--listen 127.0.0.1:8787] [--db <ruta>] [--token-file <ruta>]
   nod-collector import <fichero.jsonl>... [--db <ruta>]
   nod-collector report [--task T] [--session S] [--since 7d|24h|<fecha>] [--json] [--db <ruta>]
-  nod-collector limits [--from-file <events.jsonl>] [--db <ruta>] [--instance I] [--format tmux|text|json]
+  nod-collector limits [--from-file <events.jsonl>] [--db <ruta>] [--instance I | --session S] [--format tmux|text|json]
 
 La db por defecto es $XDG_STATE_HOME/nod/nod.db (o ~/.local/state/nod/nod.db).
 Las fechas de --since son YYYY-MM-DD o RFC 3339; sin zona se leen en UTC.
@@ -175,18 +175,41 @@ fn report(a: &Args) -> Result<(), String> {
 }
 
 fn limits_cmd(a: &Args) -> Result<(), String> {
-    let instance = a.get("instance");
+    let session = a.get("session");
     let snap = match a.get("from-file") {
         Some(f) => {
-            limits::latest_from_file(&expand(f), instance).map_err(|e| format!("{f}: {e}"))?
+            let path = expand(f);
+            let io = |e: std::io::Error| format!("{f}: {e}");
+            match session {
+                // Con --session los límites salen de la instancia de esa sesión (su cuenta).
+                Some(s) => match limits::session_from_file(&path, s).map_err(io)? {
+                    Some(ctx) => {
+                        let lim =
+                            limits::latest_from_file(&path, Some(&ctx.instance)).map_err(io)?;
+                        Some(limits::for_session(ctx, lim))
+                    }
+                    None => None,
+                },
+                None => limits::latest_from_file(&path, a.get("instance")).map_err(io)?,
+            }
         }
         None => match store::Store::open_read_only(&a.db())? {
-            Some(st) => st.latest_limit(instance)?,
+            Some(st) => match session {
+                Some(s) => match st.latest_session_usage(s)? {
+                    Some(ctx) => {
+                        let lim = st.latest_limit(Some(&ctx.instance))?;
+                        Some(limits::for_session(ctx, lim))
+                    }
+                    None => None,
+                },
+                None => st.latest_limit(a.get("instance"))?,
+            },
             None => None,
         },
     };
     let now = time::now_ms();
     let out = match a.get("format").unwrap_or("text") {
+        "tmux" if session.is_some() => limits::tmux_session(snap.as_ref(), now),
         "tmux" => limits::tmux(snap.as_ref(), now),
         "text" => limits::text(snap.as_ref(), now),
         "json" => limits::json(snap.as_ref(), now),
@@ -217,8 +240,12 @@ fn main() -> ExitCode {
         "import" => Args::parse(rest, &["db"], &[]).and_then(|a| import(&a)),
         "report" => Args::parse(rest, &["task", "session", "since", "db"], &["json"])
             .and_then(|a| report(&a).map(|_| ExitCode::SUCCESS)),
-        "limits" => Args::parse(rest, &["from-file", "db", "format", "instance"], &[])
-            .and_then(|a| limits_cmd(&a).map(|_| ExitCode::SUCCESS)),
+        "limits" => Args::parse(
+            rest,
+            &["from-file", "db", "format", "instance", "session"],
+            &[],
+        )
+        .and_then(|a| limits_cmd(&a).map(|_| ExitCode::SUCCESS)),
         other => Err(format!("comando desconocido: {other} (prueba --help)")),
     };
     match result {

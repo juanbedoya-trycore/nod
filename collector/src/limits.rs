@@ -3,7 +3,7 @@
 //! La fuente es el último `usage` con `limits` (§3), de la base de datos o directamente del fichero del destino
 //! de tipo fichero: así funciona también para quien no tenga el collector en marcha.
 
-use crate::envelope::parse_envelope;
+use crate::envelope::{parse_envelope, Event};
 use crate::store::UsageSnapshot;
 use crate::time::parse_datetime;
 use serde_json::{json, Value};
@@ -35,20 +35,19 @@ pub fn limits_of(snap: &UsageSnapshot) -> Vec<Limit> {
         .collect()
 }
 
-/// El `usage` con límites más reciente de un sobre (validado; los inválidos no cuentan).
-fn latest_in_line(line: &str, instance: Option<&str>) -> Option<UsageSnapshot> {
+/// El `usage` más reciente de un sobre que cumpla `keep` (validado; los inválidos no cuentan).
+fn latest_in_line(line: &str, keep: impl Fn(&Event) -> bool) -> Option<UsageSnapshot> {
     let v: Value = serde_json::from_str(line).ok()?;
     parse_envelope(&v)
         .ok()?
         .into_iter()
-        .filter(|e| e.kind == "usage" && e.data["limits"].is_array())
-        .filter(|e| instance.is_none_or(|i| e.instance == i))
+        .filter(|e| e.kind == "usage" && keep(e))
         .max_by_key(|e| (e.ts, e.seq))
         .map(|e| UsageSnapshot {
             instance: e.instance,
             session: e.session,
             ts: e.ts,
-            limits: e.data["limits"].clone(),
+            limits: e.data.get("limits").cloned().unwrap_or(Value::Null),
             context: e.data.get("context").cloned(),
         })
 }
@@ -61,6 +60,36 @@ pub fn latest_from_file(
     path: &Path,
     instance: Option<&str>,
 ) -> std::io::Result<Option<UsageSnapshot>> {
+    scan_back(path, "\"limits\"", |line| {
+        latest_in_line(line, |e| {
+            has_limits(&e.data["limits"]) && instance.is_none_or(|i| e.instance == i)
+        })
+    })
+}
+
+/// El último `usage` con `context` de una sesión, leyendo el fichero hacia atrás como [`latest_from_file`].
+/// Trae `limits` si ese mismo `usage` los traía; si no (OpenCode), quedan en `null`.
+pub fn session_from_file(path: &Path, session: &str) -> std::io::Result<Option<UsageSnapshot>> {
+    scan_back(path, session, |line| {
+        latest_in_line(line, |e| {
+            e.session == session && e.data["context"].is_object()
+        })
+    })
+}
+
+/// `limits` con algo dentro. Un `[]` es un proveedor sin límites de suscripción (MiniMax u otra
+/// `ANTHROPIC_BASE_URL`): no dice nada de los límites de la cuenta y no debe taparlos.
+fn has_limits(limits: &Value) -> bool {
+    limits.as_array().is_some_and(|l| !l.is_empty())
+}
+
+/// Recorre las líneas del fichero desde el final y devuelve lo primero que `pick` acepte. Las líneas que no
+/// contienen `needle` no pueden servir y se saltan sin parsear.
+fn scan_back<T>(
+    path: &Path,
+    needle: &str,
+    pick: impl Fn(&str) -> Option<T>,
+) -> std::io::Result<Option<T>> {
     let mut f = match File::open(path) {
         Ok(f) => f,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -94,11 +123,10 @@ pub fn latest_from_file(
             let Ok(line) = std::str::from_utf8(line) else {
                 continue;
             };
-            // Evita parsear sobres que no pueden tener límites.
-            if !line.contains("\"limits\"") {
+            if !line.contains(needle) {
                 continue;
             }
-            if let Some(s) = latest_in_line(line, instance) {
+            if let Some(s) = pick(line) {
                 return Ok(Some(s));
             }
         }
@@ -159,20 +187,56 @@ pub fn tmux(snap: Option<&UsageSnapshot>, now: i64) -> String {
                     s.push_str(&format!(" ↻{}", until(r, now)));
                 }
             }
-            let color = if shown >= 80.0 {
-                Some("red")
-            } else if shown >= 50.0 {
-                Some("yellow")
-            } else {
-                None
-            };
-            match color {
-                Some(c) => format!("#[fg={c}]{s}#[fg=default]"),
-                None => s,
-            }
+            paint(shown, s)
         })
         .collect::<Vec<_>>()
         .join(" · ")
+}
+
+/// Como [`tmux`], precedido del contexto de la sesión: `ctx 63% · 5h 18% ↻2h10 · 7d 24%`. Con los mismos
+/// umbrales de color. Sin límites (OpenCode) queda solo el contexto.
+pub fn tmux_session(snap: Option<&UsageSnapshot>, now: i64) -> String {
+    let ctx = snap
+        .and_then(|s| s.context.as_ref())
+        .and_then(|c| c["percent"].as_f64())
+        .map(|p| {
+            let shown = p.round();
+            paint(shown, format!("ctx {shown:.0}%"))
+        });
+    ctx.into_iter()
+        .chain(Some(tmux(snap, now)).filter(|l| !l.is_empty()))
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+/// Rojo desde el 80 %, amarillo desde el 50 %, sobre el número que se ve.
+fn paint(shown: f64, s: String) -> String {
+    let color = if shown >= 80.0 {
+        Some("red")
+    } else if shown >= 50.0 {
+        Some("yellow")
+    } else {
+        None
+    };
+    match color {
+        Some(c) => format!("#[fg={c}]{s}#[fg=default]"),
+        None => s,
+    }
+}
+
+/// Junta el contexto de una sesión (su último `usage`) con los límites más recientes de su instancia. Los
+/// límites son de la cuenta y los refresca el último turno de cualquier sesión; el contexto es solo de esta.
+/// Una sesión sin límites propios (MiniMax con `[]`, OpenCode sin el campo) no gasta los de la cuenta: no los
+/// toma prestados aunque otra sesión de la misma instancia sí los tenga.
+pub fn for_session(ctx: UsageSnapshot, limits: Option<UsageSnapshot>) -> UsageSnapshot {
+    match limits {
+        Some(l) if l.ts > ctx.ts && has_limits(&ctx.limits) => UsageSnapshot {
+            limits: l.limits,
+            ts: l.ts,
+            ..ctx
+        },
+        _ => ctx,
+    }
 }
 
 pub fn text(snap: Option<&UsageSnapshot>, now: i64) -> String {

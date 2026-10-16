@@ -184,7 +184,8 @@ impl Store {
     }
 
     /// Por instancia, el `usage` más reciente que trae `limits` (el último que dice algo de los límites; Nod los
-    /// manda juntos con el contexto al final de cada turno principal).
+    /// manda juntos con el contexto al final de cada turno principal). Un `limits: []` no cuenta: es un proveedor
+    /// sin límites de suscripción (MiniMax u otra `ANTHROPIC_BASE_URL`) y taparía los de la cuenta.
     pub fn latest_limits(&self) -> Result<Vec<UsageSnapshot>> {
         let mut st = self
             .conn
@@ -192,7 +193,7 @@ impl Store {
                 "SELECT instance, session, ts, json_extract(data, '$.limits'), json_extract(data, '$.context')
                  FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY instance ORDER BY ts DESC, run DESC, seq DESC) AS n
                        FROM events
-                       WHERE type = 'usage' AND json_type(data, '$.limits') = 'array')
+                       WHERE type = 'usage' AND json_array_length(data, '$.limits') > 0)
                  WHERE n = 1
                  ORDER BY ts DESC",
             )
@@ -211,6 +212,36 @@ impl Store {
             })
             .map_err(err)?;
         rows.collect::<std::result::Result<_, _>>().map_err(err)
+    }
+
+    /// El `usage` con `context` más reciente de una sesión, con sus `limits` si los traía (si no, `null`).
+    pub fn latest_session_usage(&self, session: &str) -> Result<Option<UsageSnapshot>> {
+        let mut st = self
+            .conn
+            .prepare(
+                "SELECT instance, session, ts, json_extract(data, '$.limits'), json_extract(data, '$.context')
+                 FROM events
+                 WHERE session = ?1 AND type = 'usage' AND json_type(data, '$.context') = 'object'
+                 ORDER BY ts DESC, run DESC, seq DESC
+                 LIMIT 1",
+            )
+            .map_err(err)?;
+        let mut rows = st
+            .query_map([session], |r| {
+                let limits: Option<String> = r.get(3)?;
+                let context: Option<String> = r.get(4)?;
+                Ok(UsageSnapshot {
+                    instance: r.get(0)?,
+                    session: r.get(1)?,
+                    ts: r.get(2)?,
+                    limits: limits
+                        .and_then(|l| serde_json::from_str(&l).ok())
+                        .unwrap_or(Value::Null),
+                    context: context.and_then(|c| serde_json::from_str(&c).ok()),
+                })
+            })
+            .map_err(err)?;
+        rows.next().transpose().map_err(err)
     }
 
     /// El `usage` con límites más reciente de todas las instancias (o de una).
